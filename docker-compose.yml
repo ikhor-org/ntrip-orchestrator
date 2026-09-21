@@ -1,0 +1,97 @@
+# Local / base stack: api (8080), proxy (2101), postgres (schema ready).
+# Runtime store is still JSON via GROKBOT_STORE_PATH until a PG adapter lands.
+# Postgres is provisioned and migrations applied on first init.
+#
+# Usage:
+#   cp .env.example .env   # edit secrets; never commit .env
+#   docker compose up -d --build
+# Prod overlay: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: grokbot:local
+    command: ["node", "packages/api/dist/main.js"]
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      API_PORT: "8080"
+      GROKBOT_STORE_PATH: /data/grokbot-store.json
+      VAULT_KEK: ${VAULT_KEK:?VAULT_KEK is required}
+      OPS_API_KEY: ${OPS_API_KEY:-}
+      ALLOW_FIXTURE_ORGS: ${ALLOW_FIXTURE_ORGS:-true}
+      CPOS_ADAPTER_ENABLED: "false"
+      DATABASE_URL: postgres://${POSTGRES_USER:-grokbot}:${POSTGRES_PASSWORD:-grokbot}@postgres:5432/${POSTGRES_DB:-grokbot}
+    volumes:
+      - grokbot-store:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  proxy:
+    image: grokbot:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "packages/proxy/dist/main.js"]
+    ports:
+      - "${PROXY_PORT:-2101}:2101"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PROXY_PORT: "2101"
+      GROKBOT_STORE_PATH: /data/grokbot-store.json
+      VAULT_KEK: ${VAULT_KEK:?VAULT_KEK is required}
+      CPOS_ADAPTER_ENABLED: "false"
+      NTRIP_UPSTREAM_HOST: ${NTRIP_UPSTREAM_HOST:-}
+      NTRIP_UPSTREAM_PORT: ${NTRIP_UPSTREAM_PORT:-2101}
+      NTRIP_UPSTREAM_MOUNTPOINT: ${NTRIP_UPSTREAM_MOUNTPOINT:-}
+      NTRIP_UPSTREAM_USER: ${NTRIP_UPSTREAM_USER:-}
+      NTRIP_UPSTREAM_PASS: ${NTRIP_UPSTREAM_PASS:-}
+      NTRIP_UPSTREAM_TLS: ${NTRIP_UPSTREAM_TLS:-false}
+    volumes:
+      - grokbot-store:/data
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-grokbot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-grokbot}
+      POSTGRES_DB: ${POSTGRES_DB:-grokbot}
+    # Not published to the host by default (use exec/psql inside the network).
+    # Local debug: temporarily add  "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    expose:
+      - "5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Alphabetical 001_…004_*.sql applied once on first init
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  grokbot-store:
+  postgres-data:

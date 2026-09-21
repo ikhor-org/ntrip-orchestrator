@@ -1,0 +1,28 @@
+# Production overlay — use with base compose:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d
+#
+# Requires a real .env with VAULT_KEK, OPS_API_KEY, strong POSTGRES_PASSWORD.
+# Never commit secrets. Fixture orgs are disabled.
+# Postgres is not published to the host (compose network only; use SSH + exec).
+
+services:
+  api:
+    environment:
+      NODE_ENV: production
+      ALLOW_FIXTURE_ORGS: "false"
+      CPOS_ADAPTER_ENABLED: "false"
+      OPS_API_KEY: ${OPS_API_KEY:?OPS_API_KEY is required in prod}
+      VAULT_KEK: ${VAULT_KEK:?VAULT_KEK is required}
+    restart: always
+
+  proxy:
+    environment:
+      NODE_ENV: production
+      CPOS_ADAPTER_ENABLED: "false"
+      VAULT_KEK: ${VAULT_KEK:?VAULT_KEK is required}
+    restart: always
+
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}
+    restart: always

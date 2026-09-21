@@ -103,6 +103,27 @@ OpenAPI: `docs/openapi/openapi.yaml`.
 
 ---
 
+## Docker / deploy packaging
+
+Local stack (API **8080**, NTRIP proxy **2101**, Postgres with `migrations/*.sql` on first init):
+
+```bash
+cp .env.example .env
+# set VAULT_KEK (required); local-dev may keep ALLOW_FIXTURE_ORGS=true
+docker compose up -d --build
+curl -fsS http://127.0.0.1:8080/healthz
+```
+
+Production overlay (forces `ALLOW_FIXTURE_ORGS=false`, requires `OPS_API_KEY` + strong `POSTGRES_PASSWORD`):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d --build
+```
+
+**Caveat:** runtime store is still the shared JSON file (`GROKBOT_STORE_PATH` on volume `grokbot-store`). Postgres is provisioned and migrations applied for a later PG adapter — the app does not use SQL at runtime yet.
+
+Hetzner / Ubuntu copy-paste runbook: **`docs/runbooks/hetzner-deploy.md`**.
+
 ## Local env
 
 ```bash
@@ -122,6 +143,7 @@ PG migrations:
 psql "$DATABASE_URL" -f migrations/001_initial.sql
 psql "$DATABASE_URL" -f migrations/002_m1_sessions.sql
 psql "$DATABASE_URL" -f migrations/003_m2_profiles_usage.sql
+psql "$DATABASE_URL" -f migrations/004_m3_screening_rbac.sql
 ```
 
 ---
