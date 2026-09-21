@@ -44,7 +44,10 @@ import {
   queryUsageEvents,
   registerUsageWebhook,
 } from './usage.js';
-import { seedFixtureUpstreamSecret } from './vault_admin.js';
+import {
+  seedFixtureUpstreamSecret,
+  seedOpsUpstreamSecret,
+} from './vault_admin.js';
 
 function sendJson(
   res: http.ServerResponse,
@@ -261,6 +264,60 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
           raw.reason,
         );
         if (result.status === 200) await store.persist();
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+
+      // --- Ops: vault upstream for activated pilot org (fixtures stay gated) ---
+      const opsUpstreamPost = match(
+        method,
+        url,
+        'POST',
+        /^\/v0\/ops\/orgs\/([^/]+)\/upstreams$/,
+      );
+      if (opsUpstreamPost) {
+        const auth = await resolveAuth(store, req.headers, {
+          opsApiKey: config.opsApiKey,
+          requireAuth: true,
+        });
+        if (!auth.ok) {
+          sendJson(res, auth.status, auth.body);
+          return;
+        }
+        const opsDeny = requireOps(auth.actor);
+        if (opsDeny) {
+          sendJson(res, opsDeny.status, opsDeny.body);
+          return;
+        }
+        const raw = (await readJson(req)) as {
+          display_name?: string;
+          host?: string;
+          port?: number;
+          use_tls?: boolean;
+          mountpoint?: string;
+          username?: string;
+          password?: string;
+        };
+        const result = seedOpsUpstreamSecret(store, config, opsUpstreamPost[1]!, {
+          display_name: raw.display_name,
+          host: raw.host ?? '',
+          port: raw.port,
+          use_tls: raw.use_tls,
+          mountpoint: raw.mountpoint,
+          username: raw.username ?? '',
+          password: raw.password ?? '',
+        });
+        if (result.status === 201) {
+          const body = result.body as { upstream_id?: string };
+          if (body.upstream_id) {
+            store.setUpstreamHealth(body.upstream_id, opsUpstreamPost[1]!, {
+              status: 'ok',
+              reachable: true,
+            });
+          }
+          await store.persist();
+        }
         sendJson(res, result.status, result.body);
         return;
       }

@@ -407,6 +407,35 @@ paths:
           description: Pilot candidate created (pending_screening)
         "401":
           description: Missing/invalid ops key
+  /v0/ops/orgs/{org_id}/upstreams:
+    post:
+      tags: [vault]
+      summary: Ops vault upstream NTRIP secret for activated pilot org
+      description: |
+        Requires X-Ops-Key. Org must be active with screening_status=cleared (not fixture).
+        Creates UpstreamEndpoint + vaulted ntrip_basic secret. Never returns plaintext password.
+        Fixture route POST /v0/fixture/upstream-secret remains gated by ALLOW_FIXTURE_ORGS.
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - name: X-Ops-Key
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpstreamSecretCreate"
+      responses:
+        "201":
+          description: Upstream + vault metadata (no password)
+        "401":
+          description: Missing/invalid ops key
+        "403":
+          description: Not ops / org not active cleared / fixture org
+        "404":
+          description: Org not found
   /v0/orgs/{org_id}/screening:
     post:
       tags: [orgs]

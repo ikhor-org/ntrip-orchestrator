@@ -73,24 +73,28 @@ Edit `.env` and set at least:
 - `OPS_API_KEY=` (from generator above)
 - `POSTGRES_PASSWORD=` (strong; required by prod overlay)
 - `CPOS_ADAPTER_ENABLED=false`
+- `API_BIND=127.0.0.1` and `PROXY_BIND=127.0.0.1` (loopback; smoke via SSH tunnel — §9)
 
 Keep `.env` only on the server (or a secrets manager). Never commit it; `.gitignore` already ignores `.env`.
 
 ---
 
-## 4. Firewall (ufw) — 8080, 2101, 22
+## 4. Firewall (ufw) — prefer SSH-only for smoke
+
+Set `API_BIND=127.0.0.1` and `PROXY_BIND=127.0.0.1` in `.env` so API/proxy listen on loopback only. For bring-up and prod smoke, **do not** open 8080/2101 in ufw — use SSH local forwards (see §9).
 
 ```bash
 sudo apt-get install -y ufw
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow 22/tcp comment 'SSH'
-sudo ufw allow 8080/tcp comment 'grokbot API'
-sudo ufw allow 2101/tcp comment 'grokbot NTRIP proxy'
-# Do NOT open 5432 publicly — Postgres is loopback-only under prod overlay
+# Do NOT open 8080/2101 for prod smoke (use API_BIND/PROXY_BIND=127.0.0.1 + SSH tunnel).
+# Do NOT open 5432 publicly — Postgres is compose-network-only.
 sudo ufw enable
 sudo ufw status verbose
 ```
+
+If you previously allowed 8080/2101 for an older bring-up, remove them before smoke (`sudo ufw delete allow 8080/tcp` etc.).
 
 ---
 
@@ -119,12 +123,12 @@ done
 ## 6. Health checks
 
 ```bash
-# On the server
+# On the server (with API_BIND=127.0.0.1)
 curl -fsS http://127.0.0.1:8080/healthz | jq .
 # Expect: ok=true, service=grokbot-api, milestone=M3
 
-# From outside (replace HOST)
-curl -fsS http://HOST:8080/healthz
+# From your laptop via SSH tunnel (see §9) — not a public HOST:8080
+curl -fsS http://127.0.0.1:8080/healthz
 ```
 
 Proxy has no HTTP health route; confirm the port is listening:
@@ -164,3 +168,158 @@ Then ufw allow `80`/`443` and optionally stop publishing `8080` publicly (bind A
 - **JSON vs Postgres** — shared volume JSON store is still the runtime; Postgres holds schema for a future adapter. Do not assume app reads/writes SQL yet.
 
 Related runbooks: `screening-workflow.md`, `credential-rotate-revoke.md`, `org-suspend.md`.
+
+---
+
+## 9. Prod NTRIP smoke via SSH tunnel (fixtures off)
+
+**Goal:** Seed a vaulted upstream for an **activated pilot org** with `ALLOW_FIXTURE_ORGS=false`, bind a device/profile, and confirm the proxy relays a clear mock/RTCM-ish stream — **without** opening public 8080/2101 for smoke and **without** third-party vendor creds in chat.
+
+### 9.1 Firewall note (prod smoke)
+
+Section 4 above documents opening 8080/2101 for a first bring-up. For **prod smoke**, prefer **not** exposing those ports publicly:
+
+```bash
+# If you previously allowed them for bring-up, remove public access for smoke:
+sudo ufw delete allow 8080/tcp || true
+sudo ufw delete allow 2101/tcp || true
+sudo ufw status verbose
+# Keep SSH (22). API + NTRIP stay on loopback / compose network; reach them via SSH forwards.
+```
+
+### 9.2 SSH local forwards (from your laptop)
+
+```bash
+# Replace USER@HOST with the VPS SSH target
+ssh -N \
+  -L 8080:127.0.0.1:8080 \
+  -L 2101:127.0.0.1:2101 \
+  USER@HOST
+```
+
+Then all `curl` / NTRIP client calls below use `http://127.0.0.1:8080` and `127.0.0.1:2101` on the laptop.
+
+### 9.3 Start mock caster (compose profile — preferred)
+
+On the VPS (no vendor secrets required):
+
+```bash
+cd /opt/grokbot
+# Optional: set dummy creds in .env (never commit). Defaults are mock/mock if unset in compose.
+# MOCK_CASTER_USER=mock
+# MOCK_CASTER_PASS=mock
+# MOCK_CASTER_MOUNT=MOCK
+
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env \
+  --profile mock-caster up -d mock-caster
+
+# Confirm it is up (internal only — not published to the host)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile mock-caster ps mock-caster
+```
+
+Proxy reaches the caster as hostname `mock-caster` port `2102` on the compose network.
+
+**Alternative:** run on the host loopback only:
+
+```bash
+MOCK_CASTER_PORT=2102 MOCK_CASTER_USER=mock MOCK_CASTER_PASS=mock \
+  node scripts/mock-ntrip-caster.mjs
+# Then vault host=127.0.0.1 — but the proxy container cannot reach host loopback
+# unless you use host networking or host.docker.internal. Prefer compose mock-caster.
+```
+
+**Existing test caster you control:** instead of mock-caster, vault `host` / `port` / `mountpoint` / `username` / `password` pointing at that caster. Provide those values **only at runtime on the server** (shell env or `.env` never committed) — **no secrets in docs or chat**.
+
+### 9.4 Ops HTTP calls (placeholders only)
+
+Load `$OPS_API_KEY` from the server `.env` (never paste real keys into tickets/chat).
+
+```bash
+# On laptop (with SSH tunnel) OR on the VPS via 127.0.0.1
+export API=http://127.0.0.1:8080
+# export OPS_API_KEY=...   # from server .env — do not commit
+
+# 0) Health
+curl -fsS "$API/healthz" | jq .
+
+# 1) Pilot intake → screening → activate (if no active pilot yet)
+ORG_ID=$(curl -fsS -X POST "$API/v0/ops/pilot-orgs" \
+  -H "content-type: application/json" \
+  -H "X-Ops-Key: $OPS_API_KEY" \
+  -d '{
+    "name": "Pilot Smoke SI",
+    "country": "NO",
+    "icp_segment": "A",
+    "end_use_representation": "Civil construction machine-control smoke"
+  }' | jq -r .id)
+
+curl -fsS -X POST "$API/v0/orgs/$ORG_ID/screening" \
+  -H "content-type: application/json" \
+  -H "X-Ops-Key: $OPS_API_KEY" \
+  -d '{
+    "result": "cleared",
+    "screening_reference": "SCR-SMOKE-LOCAL",
+    "prohibited_use_attested": true,
+    "sanctions_cleared": true,
+    "upstream_tos_acknowledged": true
+  }' | jq .
+
+curl -fsS -X POST "$API/v0/orgs/$ORG_ID/activate" \
+  -H "X-Ops-Key: $OPS_API_KEY" | jq .
+
+# 2) Vault upstream for the activated org (NOT /v0/fixture/*)
+# Password below is a local dummy for mock-caster — replace at runtime; never commit.
+UP=$(curl -fsS -X POST "$API/v0/ops/orgs/$ORG_ID/upstreams" \
+  -H "content-type: application/json" \
+  -H "X-Ops-Key: $OPS_API_KEY" \
+  -d "{
+    \"display_name\": \"mock-caster\",
+    \"host\": \"mock-caster\",
+    \"port\": 2102,
+    \"mountpoint\": \"MOCK\",
+    \"username\": \"${MOCK_CASTER_USER:-mock}\",
+    \"password\": \"${MOCK_CASTER_PASS:-mock}\"
+  }")
+echo "$UP" | jq .
+UPSTREAM_ID=$(echo "$UP" | jq -r .upstream_id)
+
+# 3) Bind profile → device (profile candidates use upstream_endpoint_id)
+PROFILE_ID=$(curl -fsS -X POST "$API/v0/orgs/$ORG_ID/profiles" \
+  -H "content-type: application/json" \
+  -d "{
+    \"name\": \"pilot-smoke\",
+    \"candidates\": [
+      { \"priority\": 1, \"upstream_endpoint_id\": \"$UPSTREAM_ID\" }
+    ]
+  }" | jq -r .id)
+
+DEV=$(curl -fsS -X POST "$API/v0/orgs/$ORG_ID/devices" \
+  -H "content-type: application/json" \
+  -H "X-Ops-Key: $OPS_API_KEY" \
+  -d "{\"label\": \"smoke-rover\", \"profile_id\": \"$PROFILE_ID\"}")
+echo "$DEV" | jq 'del(.pseudo_password)'   # avoid echoing password into logs if possible
+USER=$(echo "$DEV" | jq -r .pseudo_username)
+PASS=$(echo "$DEV" | jq -r .pseudo_password)
+
+# 4) NTRIP smoke against proxy via SSH tunnel (mount from vault / profile)
+# Expect ICY 200 / RTCM-ish bytes from mock-caster through the proxy.
+curl -v -u "$USER:$PASS" "http://127.0.0.1:2101/MOCK" --max-time 5 | xxd | head
+```
+
+Fixture route must stay closed in prod:
+
+```bash
+curl -sS -X POST "$API/v0/fixture/upstream-secret" \
+  -H "content-type: application/json" \
+  -d '{"host":"x","username":"u","password":"p"}' | jq .
+# Expect: 403 fixture_org_only
+```
+
+### 9.5 Success criteria
+
+- Ops vault `201` with `upstream_id` / `secret_id` / `last4` / host / port (no password).
+- Device provision `201` with `profile_id` bound to that upstream.
+- Proxy dials vaulted caster (mock or your test caster) and returns a clear stream over the SSH tunnel.
+- `ALLOW_FIXTURE_ORGS=false` throughout; `/v0/fixture/*` remains 403.
+
+Related: `screening-workflow.md`, `m2-failover-demo.md` (fixture-only demos).

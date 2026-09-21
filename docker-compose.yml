@@ -15,7 +15,7 @@ services:
     image: grokbot:local
     command: ["node", "packages/api/dist/main.js"]
     ports:
-      - "${API_PORT:-8080}:8080"
+      - "${API_BIND:-0.0.0.0}:${API_PORT:-8080}:8080"
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       API_PORT: "8080"
@@ -51,7 +51,7 @@ services:
       dockerfile: Dockerfile
     command: ["node", "packages/proxy/dist/main.js"]
     ports:
-      - "${PROXY_PORT:-2101}:2101"
+      - "${PROXY_BIND:-0.0.0.0}:${PROXY_PORT:-2101}:2101"
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PROXY_PORT: "2101"
@@ -91,6 +91,29 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+
+  # Optional local/mock NTRIP caster for Ops smoke (no vendor creds).
+  # Start: docker compose --profile mock-caster up -d mock-caster
+  # Vault host=mock-caster port=2102 mountpoint=MOCK user/pass from env (or open).
+  mock-caster:
+    image: node:20-bookworm-slim
+    profiles: ["mock-caster"]
+    working_dir: /app
+    command: ["node", "scripts/mock-ntrip-caster.mjs"]
+    volumes:
+      - ./scripts:/app/scripts:ro
+    environment:
+      MOCK_CASTER_HOST: "0.0.0.0"
+      MOCK_CASTER_PORT: "2102"
+      MOCK_CASTER_MOUNT: ${MOCK_CASTER_MOUNT:-MOCK}
+      MOCK_CASTER_USER: ${MOCK_CASTER_USER:-mock}
+      MOCK_CASTER_PASS: ${MOCK_CASTER_PASS:-mock}
+    # Internal network only — do not publish publicly in prod smoke.
+    # Proxy reaches it as host "mock-caster" on the compose network.
+    expose:
+      - "2102"
+    restart: unless-stopped
+
 
 volumes:
   grokbot-store:
