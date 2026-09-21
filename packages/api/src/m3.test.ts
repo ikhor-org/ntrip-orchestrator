@@ -194,21 +194,9 @@ test('approved pilot can activate and provision', async () => {
       { label: 'dozer-1' },
       { authorization: `Bearer ${apiKey}` },
     );
-    if (device.status !== 201) {
-      // Device routes remain open for usable orgs in M3 vertical slice
-      const device2 = await request(
-        server,
-        'POST',
-        `/v0/orgs/${orgId}/devices`,
-        { label: 'dozer-1' },
-      );
-      assert.equal(device2.status, 201, JSON.stringify(device2.json));
-      assert.ok(device2.json.pseudo_username);
-      assert.ok(device2.json.pseudo_password);
-    } else {
-      assert.ok(device.json.pseudo_username);
-      assert.ok(device.json.pseudo_password);
-    }
+    assert.equal(device.status, 201, JSON.stringify(device.json));
+    assert.ok(device.json.pseudo_username);
+    assert.ok(device.json.pseudo_password);
 
     const types = store.listAudit(orgId).map((a) => a.event_type);
     assert.ok(types.includes('org.pilot_intake'));
@@ -285,10 +273,32 @@ test('suspend works and blocks further use', async () => {
     assert.equal(sus.json.status, 'suspended');
     assert.equal(store.getOrg(orgId)?.status, 'suspended');
 
-    const device = await request(server, 'POST', `/v0/orgs/${orgId}/devices`, {
-      label: 'blocked',
-    });
+    const unauthDevice = await request(
+      server,
+      'POST',
+      `/v0/orgs/${orgId}/devices`,
+      { label: 'blocked' },
+    );
+    assert.equal(unauthDevice.status, 401);
+
+    const keyRes = await request(
+      server,
+      'POST',
+      `/v0/orgs/${orgId}/api-keys`,
+      { role: 'operator', label: 'after-suspend' },
+      { 'x-ops-key': OPS },
+    );
+    // ops may still mint keys; provisioning must still fail for suspended org
+    assert.equal(keyRes.status, 201, JSON.stringify(keyRes.json));
+    const device = await request(
+      server,
+      'POST',
+      `/v0/orgs/${orgId}/devices`,
+      { label: 'blocked' },
+      { authorization: `Bearer ${keyRes.json.api_key}` },
+    );
     assert.equal(device.status, 403);
+    assert.equal(device.json.error, 'org_suspended');
 
     const reAct = await request(
       server,
@@ -298,6 +308,116 @@ test('suspend works and blocks further use', async () => {
       { 'x-ops-key': OPS },
     );
     assert.equal(reAct.status, 403);
+  });
+});
+
+test('activate rejects when attestation flags cleared after screening', async () => {
+  await withServer(async (server, store) => {
+    const orgId = await intakePilot(server, 'Attestation Tamper Pilot');
+    const screen = await request(
+      server,
+      'POST',
+      `/v0/orgs/${orgId}/screening`,
+      {
+        result: 'cleared',
+        screening_reference: 'SCR-TAMPER-001',
+        prohibited_use_attested: true,
+        sanctions_cleared: true,
+        upstream_tos_acknowledged: true,
+      },
+      { 'x-ops-key': OPS },
+    );
+    assert.equal(screen.status, 200, JSON.stringify(screen.json));
+
+    // Simulate post-clearance flag regression while status stays cleared
+    const org = store.getOrg(orgId)!;
+    store.putOrg({
+      ...org,
+      prohibited_use_attested: false,
+      sanctions_cleared: true,
+      upstream_tos_acknowledged: true,
+    });
+
+    const activate = await request(
+      server,
+      'POST',
+      `/v0/orgs/${orgId}/activate`,
+      {},
+      { 'x-ops-key': OPS },
+    );
+    assert.equal(activate.status, 403);
+    assert.equal(activate.json.error, 'attestation_required');
+    assert.equal(store.getOrg(orgId)?.status, 'pending_screening');
+  });
+});
+
+test('unauthenticated device routes on active pilot org return 401', async () => {
+  await withServer(async (server) => {
+    const orgId = await intakePilot(server, 'Auth Required Pilot');
+    await clearAndActivate(server, orgId);
+
+    const listUnauth = await request(
+      server,
+      'GET',
+      `/v0/orgs/${orgId}/devices`,
+    );
+    assert.equal(listUnauth.status, 401);
+    assert.equal(listUnauth.json.error, 'unauthorized');
+
+    const provisionUnauth = await request(
+      server,
+      'POST',
+      `/v0/orgs/${orgId}/devices`,
+      { label: 'no-key' },
+    );
+    assert.equal(provisionUnauth.status, 401);
+    assert.equal(provisionUnauth.json.error, 'unauthorized');
+
+    // Provision with key, then GET device without key → 401
+    const keyRes = await request(
+      server,
+      'POST',
+      `/v0/orgs/${orgId}/api-keys`,
+      { role: 'operator', label: 'pilot-device' },
+      { 'x-ops-key': OPS },
+    );
+    assert.equal(keyRes.status, 201, JSON.stringify(keyRes.json));
+    const apiKey = keyRes.json.api_key as string;
+
+    const provisioned = await request(
+      server,
+      'POST',
+      `/v0/orgs/${orgId}/devices`,
+      { label: 'with-key' },
+      { authorization: `Bearer ${apiKey}` },
+    );
+    assert.equal(provisioned.status, 201, JSON.stringify(provisioned.json));
+    const deviceId = (provisioned.json.device as { id: string }).id;
+
+    const getUnauth = await request(server, 'GET', `/v0/devices/${deviceId}`);
+    assert.equal(getUnauth.status, 401);
+    assert.equal(getUnauth.json.error, 'unauthorized');
+
+    const getAuth = await request(
+      server,
+      'GET',
+      `/v0/devices/${deviceId}`,
+      undefined,
+      { authorization: `Bearer ${apiKey}` },
+    );
+    assert.equal(getAuth.status, 200);
+    assert.equal(getAuth.json.id, deviceId);
+
+    const listAuth = await request(
+      server,
+      'GET',
+      `/v0/orgs/${orgId}/devices`,
+      undefined,
+      { authorization: `Bearer ${apiKey}` },
+    );
+    assert.equal(listAuth.status, 200);
+    const devices = listAuth.json.devices as unknown[];
+    assert.ok(Array.isArray(devices) && devices.length >= 1);
   });
 });
 

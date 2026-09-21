@@ -46,7 +46,7 @@ Credential vault, multi-network NTRIP routing/failover, device provisioning, hea
 
 See `docs/architecture.md` §3. In short: no CPOS displacement; no spoof/jam; no mil packaging; no CORS/base stations; no fund custody; **no live orgs until screening**; **CPOS post-counsel**; **no track histories** — GGA/last-position for live session health only; metering = connect / bytes / device-days only.
 
-ToS draft + screening runbooks: `docs/tos-draft.md`, `docs/runbooks/screening-workflow.md`, `credential-rotate-revoke.md`, `org-suspend.md`. Self-serve signup remains closed; ops pilot path unlocks screened ICP-A tenants only.
+ToS draft + screening runbooks: `docs/tos-draft.md`, `docs/runbooks/screening-workflow.md`, `credential-rotate-revoke.md`, `org-suspend.md`. **ToS remains draft** — do not claim production Terms. Self-serve signup remains closed; **pilots are ops-curated until counsel signs**. Active pilot device routes require an org API key.
 
 ---
 
@@ -137,7 +137,7 @@ psql "$DATABASE_URL" -f migrations/003_m2_profiles_usage.sql
 | Failover + hysteresis | **Real** |
 | Health / audit query / usage export | **Real** |
 | Load test 50 concurrent (provisional) | **Real** (automated) |
-| ToS draft + screening runbook | **Started** (docs only) |
+| ToS draft + screening runbook | **Draft** (ops-curated pilots; counsel unsigned) |
 | Point One / GEODNET / Skylark / SmartNet | **Stub** |
 | CPOS | **Disabled** |
 | Live org POST | **403 screening_required** |
@@ -149,10 +149,11 @@ psql "$DATABASE_URL" -f migrations/003_m2_profiles_usage.sql
 
 ## M3 — screening unlock & first pilots
 
-- **Real screening gate:** `Org.status` becomes `active` only when `screening_status=cleared` via ops activate.
+- **Real screening gate:** `Org.status` becomes `active` only when `screening_status=cleared` **and** attestation flags still true via ops activate.
 - **No self-serve:** `POST /v0/orgs` (live) still `403 screening_required`.
-- **Pilot path (ICP A preferred):** `POST /v0/ops/pilot-orgs` → screening → activate (ops `X-Ops-Key`).
-- **RBAC:** org API keys with roles `admin` / `operator` / `read`.
+- **Pilot path (ICP A preferred):** `POST /v0/ops/pilot-orgs` → screening → activate (ops `X-Ops-Key`). Ops-curated until counsel signs ToS.
+- **RBAC:** org API keys with roles `admin` / `operator` / `read`. Active (non-fixture) device list/provision/get always require a valid org API key.
+- **ToS:** remains **draft** (`docs/tos-draft.md`) — not production Terms.
 - **Runbooks:** `docs/runbooks/screening-workflow.md`, `credential-rotate-revoke.md`, `org-suspend.md`.
 - **Optional Point One / GEODNET adapter spike:** **deferred** (keep M3 tight; stubs remain).
 - **CPOS:** still DISABLED / not in routable registry (no counsel clearance).

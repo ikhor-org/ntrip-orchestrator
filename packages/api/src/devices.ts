@@ -29,7 +29,8 @@ function isFixtureOrg(org: Org): boolean {
 }
 
 /**
- * Provision device + pseudo-cred against fixture org only.
+ * Provision device + pseudo-cred for a usable org (active cleared or fixture).
+ * Auth (org API key for non-fixture) is enforced by the server route layer.
  */
 export async function provisionDevice(
   store: Store,
