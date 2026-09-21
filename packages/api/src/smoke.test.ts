@@ -86,7 +86,7 @@ test('POST /v0/orgs live → 403 screening_required', async () => {
   }
 });
 
-test('GET /healthz ok M2', async () => {
+test('GET /healthz ok M3', async () => {
   const store = makeStore();
   const config = loadConfig({
     NODE_ENV: 'development',
@@ -99,7 +99,7 @@ test('GET /healthz ok M2', async () => {
     const res = await request(server, 'GET', '/healthz');
     assert.equal(res.status, 200);
     assert.equal(res.json.ok, true);
-    assert.equal(res.json.milestone, 'M2');
+    assert.equal(res.json.milestone, 'M3');
   } finally {
     await new Promise<void>((r) => server.close(() => r()));
   }

@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import {
   Device,
-  FIXTURE_ORG_ID,
   generatePseudoPassword,
   generatePseudoUsername,
   hashPassword,
   Org,
+  orgIsUsable,
   PseudoCredential,
   Store,
 } from '@grokbot/core';
@@ -44,22 +44,31 @@ export async function provisionDevice(
       body: { error: 'not_found', message: 'org not found' },
     };
   }
-  if (!isFixtureOrg(org) || !config.allowFixtureOrgs) {
+  if (org.status === 'suspended') {
     return {
       status: 403,
       body: {
-        error: 'fixture_org_only',
-        message:
-          'Device provisioning in M1 is limited to fixture orgs when ALLOW_FIXTURE_ORGS=true.',
+        error: 'org_suspended',
+        message: 'Suspended orgs cannot provision devices',
       },
     };
   }
-  if (orgId !== FIXTURE_ORG_ID && org.status !== 'fixture') {
+  if (!orgIsUsable(org)) {
+    return {
+      status: 403,
+      body: {
+        error: 'screening_required',
+        message:
+          'Device provisioning requires an active cleared org or non-prod fixture org',
+      },
+    };
+  }
+  if (isFixtureOrg(org) && !config.allowFixtureOrgs) {
     return {
       status: 403,
       body: {
         error: 'fixture_org_only',
-        message: 'Only fixture orgs may provision devices before screening unlock.',
+        message: 'Fixture provisioning requires ALLOW_FIXTURE_ORGS=true',
       },
     };
   }

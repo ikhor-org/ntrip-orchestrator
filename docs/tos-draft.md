@@ -4,7 +4,7 @@
 | --- | --- |
 | **Status** | **DRAFT** — does **not** unlock live org onboarding |
 | **Date** | 21 Sep 2026 (Europe/Oslo) |
-| **Effect** | Informational only until counsel review + screening workflow go-live (M3) |
+| **Effect** | Draft still counsel-bound; M3 ops pilot path uses these representations as screening hooks |
 
 > Engineering gate remains: `POST /v0/orgs` (live) → `403 screening_required`.
 > This draft does **not** change that gate.

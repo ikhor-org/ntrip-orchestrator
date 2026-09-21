@@ -4,6 +4,7 @@ import { FIXTURE_ORG_ID, FIXTURE_ORG_NAME } from './constants.js';
 import { buildMeteringEvent } from './metering.js';
 import { normalizePolicy } from './policy.js';
 import {
+  ApiKeyRecord,
   AuditEvent,
   Device,
   LiveSessionHealth,
@@ -36,6 +37,7 @@ interface StoreSnapshot {
   meteringEvents: MeteringEvent[];
   upstreamHealth: UpstreamHealthSnapshot[];
   usageWebhooks: UsageWebhook[];
+  apiKeys: ApiKeyRecord[];
 }
 
 export interface AuditQueryFilter {
@@ -72,6 +74,7 @@ export class Store {
   readonly meteringEvents: MeteringEvent[] = [];
   readonly upstreamHealth = new Map<string, UpstreamHealthSnapshot>();
   readonly usageWebhooks = new Map<string, UsageWebhook>();
+  readonly apiKeys = new Map<string, ApiKeyRecord>();
   /** Live sessions only — health samples dropped on end. */
   readonly liveSessions = new Map<string, LiveSessionHealth>();
 
@@ -100,6 +103,38 @@ export class Store {
 
   putOrg(org: Org): void {
     this.orgs.set(org.id, org);
+  }
+
+  putApiKey(key: ApiKeyRecord): void {
+    this.apiKeys.set(key.id, key);
+  }
+
+  getApiKey(id: string): ApiKeyRecord | undefined {
+    return this.apiKeys.get(id);
+  }
+
+  listApiKeys(orgId: string): ApiKeyRecord[] {
+    return [...this.apiKeys.values()].filter((k) => k.org_id === orgId);
+  }
+
+  listActiveApiKeys(orgId?: string): ApiKeyRecord[] {
+    return [...this.apiKeys.values()].filter(
+      (k) => !k.revoked_at && (orgId === undefined || k.org_id === orgId),
+    );
+  }
+
+  revokeApiKey(id: string, at = new Date().toISOString()): ApiKeyRecord | undefined {
+    const cur = this.apiKeys.get(id);
+    if (!cur || cur.revoked_at) return cur;
+    const next = { ...cur, revoked_at: at };
+    this.apiKeys.set(id, next);
+    return next;
+  }
+
+  touchApiKey(id: string, at = new Date().toISOString()): void {
+    const cur = this.apiKeys.get(id);
+    if (!cur) return;
+    this.apiKeys.set(id, { ...cur, last_used_at: at });
   }
 
   listDevices(orgId: string): Device[] {
@@ -445,6 +480,7 @@ export class Store {
       meteringEvents: this.meteringEvents,
       upstreamHealth: [...this.upstreamHealth.values()],
       usageWebhooks: [...this.usageWebhooks.values()],
+      apiKeys: [...this.apiKeys.values()],
     };
     await fs.writeFile(this.storePath, JSON.stringify(snap, null, 2), 'utf8');
   }
@@ -469,6 +505,7 @@ export class Store {
     this.profiles.clear();
     this.upstreamHealth.clear();
     this.usageWebhooks.clear();
+    this.apiKeys.clear();
     this.auditEvents.length = 0;
     this.meteringEvents.length = 0;
     for (const o of snap.orgs ?? []) this.orgs.set(o.id, o);
@@ -498,6 +535,7 @@ export class Store {
       this.upstreamHealth.set(h.upstream_id, h);
     }
     for (const w of snap.usageWebhooks ?? []) this.usageWebhooks.set(w.id, w);
+    for (const k of snap.apiKeys ?? []) this.apiKeys.set(k.id, k);
     this.auditEvents.push(...(snap.auditEvents ?? []));
     this.meteringEvents.push(...(snap.meteringEvents ?? []));
   }

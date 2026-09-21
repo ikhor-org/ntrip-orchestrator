@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| **Status** | **STARTED** — process draft only |
-| **Unlocks live orgs?** | **No** — M3 |
+| **Status** | **LIVE (ops path)** — M3 pilot activation |
+| **Unlocks live orgs?** | **Pilots only** via ops path — no self-serve |
 | **Date** | 21 Sep 2026 (Europe/Oslo) |
 
 ## Goal
@@ -16,7 +16,7 @@ Before any `Org.status = active`, require `screening_status = cleared` (architec
 POST /v0/orgs   # live (no fixture flag) → 403 screening_required
 ```
 
-This runbook does **not** remove that gate.
+Self-serve `POST /v0/orgs` remains `403 screening_required`. Pilots use the ops intake path below.
 
 ## Draft workflow steps
 
@@ -24,7 +24,9 @@ This runbook does **not** remove that gate.
 2. **Sanctions / export-control screen** — EU/NO applicable lists; record `screening_reference`.
 3. **End-use attestation** — customer signs ToS (when published) + prohibited-use acknowledgment (no jam/spoof, no mil weapons guidance, no unauthorized surveillance).
 4. **Decision** — `cleared` | `rejected` | `pending` (more info).
-5. **Activation** — only then may control plane set `status=active` (M3 API; not implemented in M2).
+5. **Activation** — ops calls `POST /v0/orgs/{id}/activate` only when `screening_status=cleared`.
+6. **API keys** — ops/admin issues role-scoped keys (`admin` / `operator` / `read`).
+7. **Ongoing** — right to suspend; audit retained.
 6. **Ongoing** — right to suspend on credible misuse; retain audit for review.
 
 ## Roles (draft)
@@ -47,3 +49,25 @@ This runbook does **not** remove that gate.
 
 - Enabling CPOS adapter (post-counsel only)
 - Accepting live customer traffic under this draft
+
+
+## M3 ops API (ICP A preferred)
+
+Prefer Nordic construction machine-control SI/OEM (ICP A).
+
+```http
+POST /v0/ops/pilot-orgs          # X-Ops-Key; creates pending_screening (NOT active)
+POST /v0/orgs/{id}/screening     # result=cleared requires attestations + sanctions_cleared
+POST /v0/orgs/{id}/activate      # requires screening_status=cleared; audited
+POST /v0/orgs/{id}/suspend       # right to suspend
+POST /v0/orgs/{id}/api-keys      # admin/ops; roles admin|operator|read
+```
+
+Cleared screening requires:
+
+- `prohibited_use_attested=true` (no unauthorized surveillance / criminal / mil weapons guidance / jam-spoof / sanctions)
+- `sanctions_cleared=true`
+- `upstream_tos_acknowledged=true` (customer owns upstream ToS)
+- civil/commercial `end_use_representation`
+
+**Do not** auto-approve random signups. Fixture org remains non-prod only.

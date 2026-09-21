@@ -6,11 +6,50 @@ export type ScreeningStatus =
   | 'rejected'
   | 'fixture_exempt';
 
+/** Beachhead ICP from deep-dive §5 — prefer A for pilots. */
+export type IcpSegment = 'A' | 'B' | 'C' | 'other';
+
 export interface Org {
   id: string;
   name: string;
   status: OrgStatus;
   screening_status: ScreeningStatus;
+  /** ISO country of legal entity (sanctions/export hook). */
+  country?: string;
+  /** ICP segment — pilots prefer A (Nordic construction machine-control SI/OEM). */
+  icp_segment?: IcpSegment;
+  /** Civil/commercial end-use representation captured at screening. */
+  end_use_representation?: string;
+  /** Customer attested prohibited-use acknowledgment. */
+  prohibited_use_attested?: boolean;
+  /** Sanctions/export screening performed on org identity. */
+  sanctions_cleared?: boolean;
+  /** Customer owns upstream network ToS (recorded acknowledgment). */
+  upstream_tos_acknowledged?: boolean;
+  screening_at?: string;
+  screening_reference?: string;
+  screening_notes?: string;
+  activated_at?: string;
+  suspended_at?: string;
+  suspended_reason?: string;
+  created_at?: string;
+}
+
+/** API key roles — architecture §10.1. */
+export type ApiKeyRole = 'admin' | 'operator' | 'read';
+
+export interface ApiKeyRecord {
+  id: string;
+  org_id: string;
+  /** Public prefix for identification (e.g. gbk_xxxx…). */
+  key_prefix: string;
+  /** scrypt hash of full secret — never store plaintext. */
+  key_hash: string;
+  role: ApiKeyRole;
+  label?: string;
+  created_at: string;
+  revoked_at?: string;
+  last_used_at?: string;
 }
 
 export interface Device {
@@ -205,3 +244,21 @@ export type FailoverReasonCode =
   | 'max_switches_exhausted'
   | 'candidates_exhausted'
   | 'keep_last_best_effort';
+
+/** Org may use pilot capabilities (devices, profiles, sessions). */
+export function orgIsUsable(org: Org): boolean {
+  if (org.status === 'suspended') return false;
+  if (org.status === 'fixture' || org.screening_status === 'fixture_exempt') {
+    return true;
+  }
+  return org.status === 'active' && org.screening_status === 'cleared';
+}
+
+/** Engineering gate: active requires cleared screening. */
+export function canActivateOrg(org: Org): boolean {
+  return (
+    org.screening_status === 'cleared' &&
+    org.status !== 'suspended' &&
+    org.status !== 'fixture'
+  );
+}

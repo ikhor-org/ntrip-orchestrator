@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
   title: grokbot Control API
-  version: 0.2.0-m2
+  version: 0.3.0-m3
   description: |
-    M2 control API for GNSS RTK OEM/fleet correction orchestration.
+    M3 control API for GNSS RTK OEM/fleet correction orchestration.
     Profile policy primary/secondary + failover hysteresis; health/audit/usage APIs.
     Live org provisioning is gated: POST /v0/orgs without screening → 403 screening_required.
     Fixture orgs only in non-prod when ALLOW_FIXTURE_ORGS=true.
@@ -11,7 +11,7 @@ info:
     Load test target (provisional, O8 OPEN): 50 concurrent mocked sessions.
 servers:
   - url: http://localhost:8080
-    description: Local M2
+    description: Local M3
 tags:
   - name: orgs
   - name: devices
@@ -377,6 +377,138 @@ paths:
       responses:
         "201":
           description: Webhook registered (secret returned once)
+  /v0/ops/pilot-orgs:
+    post:
+      tags: [orgs]
+      summary: Ops pilot intake (no self-serve)
+      description: |
+        Creates org in pending_screening. Prefer ICP A (Nordic construction machine-control SI/OEM).
+        Requires X-Ops-Key. Does not activate.
+      parameters:
+        - name: X-Ops-Key
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, country, end_use_representation]
+              properties:
+                name: { type: string }
+                country: { type: string }
+                icp_segment: { type: string, enum: [A, B, C, other] }
+                end_use_representation: { type: string }
+                notes: { type: string }
+      responses:
+        "201":
+          description: Pilot candidate created (pending_screening)
+        "401":
+          description: Missing/invalid ops key
+  /v0/orgs/{org_id}/screening:
+    post:
+      tags: [orgs]
+      summary: Record screening result (ops)
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - name: X-Ops-Key
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [result]
+              properties:
+                result: { type: string, enum: [pending, cleared, rejected] }
+                screening_reference: { type: string }
+                prohibited_use_attested: { type: boolean }
+                sanctions_cleared: { type: boolean }
+                upstream_tos_acknowledged: { type: boolean }
+                end_use_representation: { type: string }
+      responses:
+        "200":
+          description: Screening recorded
+        "400":
+          description: Cleared missing attestations
+  /v0/orgs/{org_id}/activate:
+    post:
+      tags: [orgs]
+      summary: Activate approved pilot (ops)
+      description: Requires screening_status=cleared. Audited. No auto-approve of random signups.
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - name: X-Ops-Key
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Org active
+        "403":
+          description: screening_required or suspended
+  /v0/orgs/{org_id}/suspend:
+    post:
+      tags: [orgs]
+      summary: Suspend org (ops or org admin)
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        "200":
+          description: Suspended
+  /v0/orgs/{org_id}/api-keys:
+    post:
+      tags: [orgs]
+      summary: Create org API key (ops or admin)
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role: { type: string, enum: [admin, operator, read] }
+                label: { type: string }
+      responses:
+        "201":
+          description: Key created (plaintext once)
+        "403":
+          description: Role forbidden
+    get:
+      tags: [orgs]
+      summary: List org API keys (no secrets)
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+      responses:
+        "200":
+          description: Key metadata list
+  /v0/orgs/{org_id}/api-keys/{key_id}/revoke:
+    post:
+      tags: [orgs]
+      summary: Revoke API key
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - name: key_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Revoked
+
 components:
   parameters:
     OrgId:
@@ -406,7 +538,7 @@ components:
       properties:
         ok: { type: boolean }
         service: { type: string }
-        milestone: { type: string, example: M2 }
+        milestone: { type: string, example: M3 }
         load_test_target_concurrent_sessions: { type: integer, example: 50 }
         load_test_target_label:
           type: string

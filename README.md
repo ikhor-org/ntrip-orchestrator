@@ -6,10 +6,9 @@ Credential vault, multi-network NTRIP routing/failover, device provisioning, hea
 
 | Field | Value |
 | --- | --- |
-| **Milestone** | **M2** — failover + ops visibility |
+| **Milestone** | **M3** — screening unlock & first pilots |
 | **Date** | 21 Sep 2026 (Europe/Oslo) |
-| **Status** | Profile policy, health-triggered failover with hysteresis, health/audit/usage APIs, provisional load test (50 concurrent mocked sessions). Live orgs still gated. |
-| **Load test target** | **50 concurrent mocked sessions** — **provisional** (architecture O8 OPEN) |
+| **Status** | Screening gate live for ops pilots; RBAC API keys; CPOS still disabled. Self-serve signup closed. | **Load test target** | **50 concurrent mocked sessions** — **provisional** (architecture O8 OPEN) |
 
 ---
 
@@ -24,9 +23,9 @@ Credential vault, multi-network NTRIP routing/failover, device provisioning, hea
 
 ---
 
-## M0 → M1 → M2
+## M0 → M1 → M2 → M3
 
-| | M0 | M1 | M2 (this branch) |
+| | M0 | M1 | M2 | M3 (this branch) |
 | --- | --- | --- | --- |
 | Vault | Ciphertext columns | **Real** AES-256-GCM | same |
 | Devices | 501 | **Real** fixture provision | same + profile_id |
@@ -36,8 +35,8 @@ Credential vault, multi-network NTRIP routing/failover, device provisioning, hea
 | Audit | writers | list | **Filtered query** (org/device/time/event_type) |
 | Usage | writers | list | **Export + signed webhook** |
 | Load test | — | — | **50 concurrent** (provisional) |
-| Docs | checklist | M1 runbook | **ToS draft + screening runbook started** |
-| Live `POST /v0/orgs` | 403 | 403 | **Still 403 `screening_required`** |
+| Docs | checklist | M1 runbook | M2 ToS/screening draft | **M3 screening live + RBAC runbooks** |
+| Live `POST /v0/orgs` | 403 | 403 | 403 | **Still 403; pilots via ops path** |
 
 **Merge order:** PR #1 `m0-skeleton` → `main`, then PR #2 `m1-generic-ntrip` → `m0-skeleton`, then this PR → `m1-generic-ntrip`.
 
@@ -47,7 +46,7 @@ Credential vault, multi-network NTRIP routing/failover, device provisioning, hea
 
 See `docs/architecture.md` §3. In short: no CPOS displacement; no spoof/jam; no mil packaging; no CORS/base stations; no fund custody; **no live orgs until screening**; **CPOS post-counsel**; **no track histories** — GGA/last-position for live session health only; metering = connect / bytes / device-days only.
 
-ToS draft + screening runbook: `docs/tos-draft.md`, `docs/runbooks/screening-workflow.md` — **do not unlock live orgs**.
+ToS draft + screening runbooks: `docs/tos-draft.md`, `docs/runbooks/screening-workflow.md`, `credential-rotate-revoke.md`, `org-suspend.md`. Self-serve signup remains closed; ops pilot path unlocks screened ICP-A tenants only.
 
 ---
 
@@ -145,4 +144,17 @@ psql "$DATABASE_URL" -f migrations/003_m2_profiles_usage.sql
 
 ---
 
-*M2 failover + ops visibility. Stack on M1 (`m1-generic-ntrip`). Keep screening + CPOS gates closed.*
+*M3 screening unlock & first pilots. Stack on M2 (`m2-failover-ops`). Self-serve still closed; CPOS still disabled; Point One/GEODNET spike deferred.*
+
+
+## M3 — screening unlock & first pilots
+
+- **Real screening gate:** `Org.status` becomes `active` only when `screening_status=cleared` via ops activate.
+- **No self-serve:** `POST /v0/orgs` (live) still `403 screening_required`.
+- **Pilot path (ICP A preferred):** `POST /v0/ops/pilot-orgs` → screening → activate (ops `X-Ops-Key`).
+- **RBAC:** org API keys with roles `admin` / `operator` / `read`.
+- **Runbooks:** `docs/runbooks/screening-workflow.md`, `credential-rotate-revoke.md`, `org-suspend.md`.
+- **Optional Point One / GEODNET adapter spike:** **deferred** (keep M3 tight; stubs remain).
+- **CPOS:** still DISABLED / not in routable registry (no counsel clearance).
+
+**Merge order:** PR #1 `m0-skeleton` → `main`, then #2 `m1-generic-ntrip` → `m0-skeleton`, then #3 `m2-failover-ops` → `m1-generic-ntrip`, then **this PR #4** `m3-screening-pilots` → `m2-failover-ops`.

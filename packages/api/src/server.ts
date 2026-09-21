@@ -15,7 +15,22 @@ import {
   orgHealth,
   upstreamHealth,
 } from './health.js';
-import { createOrg, getOrg, seedFixtureOrg } from './orgs.js';
+import {
+  activateOrg,
+  createOrg,
+  createPilotOrg,
+  getOrg,
+  recordScreening,
+  seedFixtureOrg,
+  suspendOrg,
+} from './orgs.js';
+import {
+  createOrgApiKey,
+  publicApiKeyView,
+  requireOps,
+  requireRole,
+  resolveAuth,
+} from './auth.js';
 import {
   createProfile,
   getProfile,
@@ -92,7 +107,7 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
         sendJson(res, 200, {
           ok: true,
           service: 'grokbot-api',
-          milestone: 'M2',
+          milestone: 'M3',
           routable_adapters: listRoutableAdapters().map((a) => a.type),
           fixture_org_id: FIXTURE_ORG_ID,
           load_test_target_concurrent_sessions: 50,
@@ -126,6 +141,252 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
         sendJson(res, 200, org);
         return;
       }
+
+      // --- M3: ops pilot intake (no self-serve) ---
+      if (match(method, url, 'POST', /^\/v0\/ops\/pilot-orgs$/)) {
+        const auth = await resolveAuth(store, req.headers, {
+          opsApiKey: config.opsApiKey,
+          requireAuth: true,
+        });
+        if (!auth.ok) {
+          sendJson(res, auth.status, auth.body);
+          return;
+        }
+        const opsDeny = requireOps(auth.actor);
+        if (opsDeny) {
+          sendJson(res, opsDeny.status, opsDeny.body);
+          return;
+        }
+        const raw = (await readJson(req)) as {
+          name?: string;
+          country?: string;
+          icp_segment?: 'A' | 'B' | 'C' | 'other';
+          end_use_representation?: string;
+          notes?: string;
+        };
+        const result = createPilotOrg(store, auth.actor, raw);
+        if (result.status === 201) await store.persist();
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+      const screeningPost = match(
+        method,
+        url,
+        'POST',
+        /^\/v0\/orgs\/([^/]+)\/screening$/,
+      );
+      if (screeningPost) {
+        const auth = await resolveAuth(store, req.headers, {
+          opsApiKey: config.opsApiKey,
+          requireAuth: true,
+        });
+        if (!auth.ok) {
+          sendJson(res, auth.status, auth.body);
+          return;
+        }
+        const opsDeny = requireOps(auth.actor);
+        if (opsDeny) {
+          sendJson(res, opsDeny.status, opsDeny.body);
+          return;
+        }
+        const raw = (await readJson(req)) as Record<string, unknown>;
+        const result = recordScreening(
+          store,
+          auth.actor,
+          screeningPost[1]!,
+          raw as never,
+        );
+        if (result.status === 200) await store.persist();
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+      const activatePost = match(
+        method,
+        url,
+        'POST',
+        /^\/v0\/orgs\/([^/]+)\/activate$/,
+      );
+      if (activatePost) {
+        const auth = await resolveAuth(store, req.headers, {
+          opsApiKey: config.opsApiKey,
+          requireAuth: true,
+        });
+        if (!auth.ok) {
+          sendJson(res, auth.status, auth.body);
+          return;
+        }
+        const opsDeny = requireOps(auth.actor);
+        if (opsDeny) {
+          sendJson(res, opsDeny.status, opsDeny.body);
+          return;
+        }
+        const result = activateOrg(store, auth.actor, activatePost[1]!);
+        if (result.status === 200) await store.persist();
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+      const suspendPost = match(
+        method,
+        url,
+        'POST',
+        /^\/v0\/orgs\/([^/]+)\/suspend$/,
+      );
+      if (suspendPost) {
+        const auth = await resolveAuth(store, req.headers, {
+          opsApiKey: config.opsApiKey,
+          requireAuth: true,
+        });
+        if (!auth.ok) {
+          sendJson(res, auth.status, auth.body);
+          return;
+        }
+        // Ops or org admin
+        const opsDeny = requireOps(auth.actor);
+        if (opsDeny) {
+          const roleDeny = requireRole(auth.actor, 'admin', suspendPost[1]!);
+          if (roleDeny) {
+            sendJson(res, roleDeny.status, roleDeny.body);
+            return;
+          }
+        }
+        const raw = (await readJson(req)) as { reason?: string };
+        const result = suspendOrg(
+          store,
+          auth.actor,
+          suspendPost[1]!,
+          raw.reason,
+        );
+        if (result.status === 200) await store.persist();
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+      const apiKeysPost = match(
+        method,
+        url,
+        'POST',
+        /^\/v0\/orgs\/([^/]+)\/api-keys$/,
+      );
+      if (apiKeysPost) {
+        const orgId = apiKeysPost[1]!;
+        const auth = await resolveAuth(store, req.headers, {
+          opsApiKey: config.opsApiKey,
+          requireAuth: true,
+        });
+        if (!auth.ok) {
+          sendJson(res, auth.status, auth.body);
+          return;
+        }
+        const opsDeny = requireOps(auth.actor);
+        if (opsDeny) {
+          const roleDeny = requireRole(auth.actor, 'admin', orgId);
+          if (roleDeny) {
+            sendJson(res, roleDeny.status, roleDeny.body);
+            return;
+          }
+        }
+        const org = getOrg(store, orgId);
+        if (!org) {
+          sendJson(res, 404, { error: 'not_found', message: 'org not found' });
+          return;
+        }
+        const raw = (await readJson(req)) as {
+          role?: 'admin' | 'operator' | 'read';
+          label?: string;
+        };
+        const role = raw.role ?? 'read';
+        if (!['admin', 'operator', 'read'].includes(role)) {
+          sendJson(res, 400, {
+            error: 'invalid_request',
+            message: 'role must be admin | operator | read',
+          });
+          return;
+        }
+        const { record, plaintext } = await createOrgApiKey(
+          store,
+          orgId,
+          role,
+          raw.label,
+        );
+        await store.persist();
+        sendJson(res, 201, {
+          ...publicApiKeyView(record),
+          api_key: plaintext,
+        });
+        return;
+      }
+
+      const apiKeysList = match(
+        method,
+        url,
+        'GET',
+        /^\/v0\/orgs\/([^/]+)\/api-keys$/,
+      );
+      if (apiKeysList) {
+        const orgId = apiKeysList[1]!;
+        const auth = await resolveAuth(store, req.headers, {
+          opsApiKey: config.opsApiKey,
+          allowFixtureDev: config.allowFixtureOrgs,
+        });
+        if (!auth.ok) {
+          sendJson(res, auth.status, auth.body);
+          return;
+        }
+        const opsDeny = requireOps(auth.actor);
+        if (opsDeny) {
+          const roleDeny = requireRole(auth.actor, 'admin', orgId);
+          if (roleDeny) {
+            sendJson(res, roleDeny.status, roleDeny.body);
+            return;
+          }
+        }
+        const keys = store.listApiKeys(orgId).map(publicApiKeyView);
+        sendJson(res, 200, { api_keys: keys });
+        return;
+      }
+
+      const apiKeyRevoke = match(
+        method,
+        url,
+        'POST',
+        /^\/v0\/orgs\/([^/]+)\/api-keys\/([^/]+)\/revoke$/,
+      );
+      if (apiKeyRevoke) {
+        const orgId = apiKeyRevoke[1]!;
+        const keyId = apiKeyRevoke[2]!;
+        const auth = await resolveAuth(store, req.headers, {
+          opsApiKey: config.opsApiKey,
+          requireAuth: true,
+        });
+        if (!auth.ok) {
+          sendJson(res, auth.status, auth.body);
+          return;
+        }
+        const opsDeny = requireOps(auth.actor);
+        if (opsDeny) {
+          const roleDeny = requireRole(auth.actor, 'admin', orgId);
+          if (roleDeny) {
+            sendJson(res, roleDeny.status, roleDeny.body);
+            return;
+          }
+        }
+        const key = store.getApiKey(keyId);
+        if (!key || key.org_id !== orgId) {
+          sendJson(res, 404, {
+            error: 'not_found',
+            message: 'api key not found',
+          });
+          return;
+        }
+        const revoked = store.revokeApiKey(keyId);
+        await store.persist();
+        sendJson(res, 200, publicApiKeyView(revoked!));
+        return;
+      }
+
 
       const devicesList = match(
         method,

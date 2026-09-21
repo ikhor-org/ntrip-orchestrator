@@ -92,11 +92,11 @@ test('POST /v0/orgs live still 403 screening_required (M2)', async () => {
   });
 });
 
-test('GET /healthz reports M2', async () => {
+test('GET /healthz reports M3', async () => {
   await withServer(async (server) => {
     const res = await request(server, 'GET', '/healthz');
     assert.equal(res.status, 200);
-    assert.equal(res.json.milestone, 'M2');
+    assert.equal(res.json.milestone, 'M3');
     assert.equal(res.json.load_test_target_concurrent_sessions, 50);
   });
 });

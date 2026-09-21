@@ -3,6 +3,7 @@ import {
   normalizePolicy,
   Profile,
   ProfileCandidate,
+  orgIsUsable,
   ProfilePolicy,
   Store,
 } from '@grokbot/core';
@@ -13,11 +14,6 @@ export interface ProfileResult {
   body: Profile | ApiErrorBody | { profiles: Profile[] };
 }
 
-function isFixtureOrg(store: Store, orgId: string): boolean {
-  const org = store.getOrg(orgId);
-  if (!org) return false;
-  return org.status === 'fixture' || org.screening_status === 'fixture_exempt';
-}
 
 export function createProfile(
   store: Store,
@@ -38,12 +34,22 @@ export function createProfile(
       body: { error: 'not_found', message: 'org not found' },
     };
   }
-  if (!isFixtureOrg(store, orgId)) {
+  if (org.status === 'suspended') {
     return {
       status: 403,
       body: {
-        error: 'fixture_org_only',
-        message: 'Profile create limited to fixture orgs before screening unlock.',
+        error: 'org_suspended',
+        message: 'Suspended orgs cannot create profiles',
+      },
+    };
+  }
+  if (!orgIsUsable(org)) {
+    return {
+      status: 403,
+      body: {
+        error: 'screening_required',
+        message:
+          'Profile create requires an active cleared org or non-prod fixture org',
       },
     };
   }
