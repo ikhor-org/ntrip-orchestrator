@@ -46,7 +46,7 @@ Credential vault, multi-network NTRIP routing/failover, device provisioning, hea
 
 See `docs/architecture.md` §3. In short: no CPOS displacement; no spoof/jam; no mil packaging; no CORS/base stations; no fund custody; **no live orgs until screening**; **CPOS post-counsel**; **no track histories** — GGA/last-position for live session health only; metering = connect / bytes / device-days only.
 
-ToS draft + screening runbooks: `docs/tos-draft.md`, `docs/runbooks/screening-workflow.md`, `credential-rotate-revoke.md`, `org-suspend.md`. **ToS remains draft** — do not claim production Terms. Self-serve signup remains closed; **pilots are ops-curated until counsel signs**. Active pilot device routes require an org API key.
+ToS draft + screening runbooks: `docs/tos-draft.md`, `docs/runbooks/screening-workflow.md`, `credential-rotate-revoke.md`, `org-suspend.md`. **ToS remains draft** — do not claim production Terms. Self-serve signup remains closed; **pilots are ops-curated until counsel signs**. Active pilot device routes require an org API key. Active pilots vault upstreams via ops `POST /v0/ops/orgs/{org_id}/upstreams` (X-Ops-Key) — not `/v0/fixture/*`. Prod NTRIP smoke (SSH tunnel + mock caster): `docs/runbooks/hetzner-deploy.md` §9.
 
 ---
 

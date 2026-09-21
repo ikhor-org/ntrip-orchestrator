@@ -9,7 +9,7 @@
   "scripts": {
     "build": "npm run build -w @grokbot/core && npm run build -w @grokbot/adapters && npm run build -w @grokbot/api && npm run build -w @grokbot/proxy",
     "lint": "eslint \"packages/*/src/**/*.ts\"",
-    "test": "npm run build && node --test packages/core/dist/vault.test.js packages/core/dist/policy.test.js packages/api/dist/smoke.test.js packages/api/dist/m2.test.js packages/api/dist/m3.test.js packages/proxy/dist/smoke.test.js packages/proxy/dist/failover.test.js packages/proxy/dist/load.test.js packages/adapters/dist/smoke.test.js",
+    "test": "npm run build && node --test packages/core/dist/vault.test.js packages/core/dist/policy.test.js packages/api/dist/smoke.test.js packages/api/dist/m2.test.js packages/api/dist/m3.test.js packages/api/dist/ops_upstream.test.js packages/proxy/dist/smoke.test.js packages/proxy/dist/failover.test.js packages/proxy/dist/load.test.js packages/adapters/dist/smoke.test.js",
     "typecheck": "tsc -b packages/core packages/adapters packages/api packages/proxy",
     "dev:api": "npm run start -w @grokbot/api",
     "dev:proxy": "npm run start -w @grokbot/proxy",

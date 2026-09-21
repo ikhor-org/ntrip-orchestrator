@@ -4,6 +4,11 @@
 # Requires a real .env with VAULT_KEK, OPS_API_KEY, strong POSTGRES_PASSWORD.
 # Never commit secrets. Fixture orgs are disabled.
 # Postgres is not published to the host (compose network only; use SSH + exec).
+#
+# Bind API/proxy to loopback for prod smoke: set in .env
+#   API_BIND=127.0.0.1
+#   PROXY_BIND=127.0.0.1
+# Do not open ufw 8080/2101 — use SSH tunnel (docs/runbooks/hetzner-deploy.md §9).
 
 services:
   api:
