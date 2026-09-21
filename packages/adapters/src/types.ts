@@ -21,11 +21,23 @@ export interface UpstreamEndpoint {
   options?: Record<string, unknown>;
 }
 
-/** Opaque secret material — never log plaintext. */
+/**
+ * Secret material released from vault for session TTL only.
+ * Never log plaintext fields.
+ */
 export interface SecretMaterial {
   secretType: 'ntrip_basic' | 'bearer_token' | 'api_key_pair' | 'opaque_blob';
-  /** In M0 this is a placeholder; real vault decrypt lands in M1. */
-  placeholder: true;
+  /** ntrip_basic: username + password (+ optional host/port/mount overrides). */
+  ntripBasic?: {
+    username: string;
+    password: string;
+    host?: string;
+    port?: number;
+    mountpoint?: string;
+  };
+  bearerToken?: string;
+  apiKeyPair?: { appId: string; appKey: string };
+  opaque?: Record<string, unknown>;
 }
 
 export interface SessionHints {
@@ -65,5 +77,17 @@ export class AdapterDisabledError extends Error {
   constructor(type: AdapterType, reason: string) {
     super(`Adapter ${type} is disabled: ${reason}`);
     this.name = 'AdapterDisabledError';
+  }
+}
+
+export class AdapterConnectError extends Error {
+  readonly code: 'unreachable' | 'auth_failed' | 'stalled' | 'bad_secret' | 'rejected';
+  constructor(
+    code: AdapterConnectError['code'],
+    message: string,
+  ) {
+    super(message);
+    this.name = 'AdapterConnectError';
+    this.code = code;
   }
 }

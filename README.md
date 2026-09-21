@@ -6,115 +6,155 @@ Credential vault, multi-network NTRIP routing/failover, device provisioning, hea
 
 | Field | Value |
 | --- | --- |
-| **Milestone** | **M0** — design freeze & skeleton (this branch) |
+| **Milestone** | **M3** — screening unlock & first pilots |
 | **Date** | 21 Sep 2026 (Europe/Oslo) |
-| **Status** | Skeleton only — no live tenants, no real vault crypto, no upstream relay |
+| **Status** | Screening gate live for ops pilots; RBAC API keys; CPOS still disabled. Self-serve signup closed. | **Load test target** | **50 concurrent mocked sessions** — **provisional** (architecture O8 OPEN) |
 
 ---
 
-## Stack choice
+## Stack
 
-**TypeScript (Node 20+) monorepo** — `packages/api`, `packages/proxy`, `packages/adapters`.
+**TypeScript (Node 20+) monorepo** — `packages/core`, `packages/api`, `packages/proxy`, `packages/adapters`.
 
-**Why:** Architecture §9 allows Go-everywhere *or* TypeScript for the control API (OpenAPI speed) with a preference for **one language until M2**. TypeScript gets a clean npm-workspaces monorepo, OpenAPI stub, and shared adapter types fastest for M0; the proxy remains a thin TCP listen/auth stub that can move to Go/Rust later if needed without blocking the control-plane skeleton.
-
-Datastore target remains **PostgreSQL** (`migrations/`). No production KEK in M0.
+- **Datastore:** PostgreSQL schema in `migrations/` (source of truth). Runtime uses in-memory store + optional JSON file (`GROKBOT_STORE_PATH`) so api + proxy share state locally.
+- **Vault:** AES-256-GCM; KEK from `VAULT_KEK` / `VAULT_MASTER_KEY` (32-byte hex or base64).
+- **Pseudo-creds:** scrypt password hashes.
+- **Policy:** ordered primary/secondary candidates; `unhealthy_after_ms` + `max_switches_per_hour` hysteresis.
 
 ---
 
-## M0 vs M1
+## M0 → M1 → M2 → M3
 
-| | M0 (this repo state) | M1 (next) |
-| --- | --- | --- |
-| Docs | Architecture, decision record, threat/screening checklist, OpenAPI stub | Same + vertical-slice notes |
-| Control API | Health, org GET/POST stubs; **live POST → 403 `screening_required`** | Device pseudo-cred provision (fixture org) |
-| Proxy | Listen + Basic Auth stub; **no real upstream** | Relay via generic NTRIP Basic Auth to test caster |
-| Vault | Ciphertext columns in SQL only | Encrypt/decrypt path |
-| Adapters | Interface + stubs; **CPOS present but disabled / not registered** | **Real:** `ntrip_basic`. Still stub: Point One, GEODNET, Skylark, SmartNet, CPOS |
-| Metering / audit | Schema + OpenAPI shapes (no lat/lon) | Writers to PG |
+| | M0 | M1 | M2 | M3 (this branch) |
+| --- | --- | --- | --- |
+| Vault | Ciphertext columns | **Real** AES-256-GCM | same |
+| Devices | 501 | **Real** fixture provision | same + profile_id |
+| Proxy | Auth stub | **Real** NTRIP relay | **Failover** via profile policy |
+| Policy | — | implicit single upstream | **Primary/secondary + hysteresis** |
+| Health API | basic org | basic | **upstreams + devices + sessions** |
+| Audit | writers | list | **Filtered query** (org/device/time/event_type) |
+| Usage | writers | list | **Export + signed webhook** |
+| Load test | — | — | **50 concurrent** (provisional) |
+| Docs | checklist | M1 runbook | M2 ToS/screening draft | **M3 screening live + RBAC runbooks** |
+| Live `POST /v0/orgs` | 403 | 403 | 403 | **Still 403; pilots via ops path** |
+
+**Merge order:** PR #1 `m0-skeleton` → `main`, then PR #2 `m1-generic-ntrip` → `m0-skeleton`, then this PR → `m1-generic-ntrip`.
 
 ---
 
 ## Non-goals (standing)
 
-See `docs/architecture.md` §3 and `docs/decision-record.md`. In short:
+See `docs/architecture.md` §3. In short: no CPOS displacement; no spoof/jam; no mil packaging; no CORS/base stations; no fund custody; **no live orgs until screening**; **CPOS post-counsel**; **no track histories** — GGA/last-position for live session health only; metering = connect / bytes / device-days only.
 
-1. No Kartverket CPOS displacement  
-2. No GNSS spoof/jam products or tradecraft  
-3. No military guidance / anti-spoof packaging  
-4. No building CORS / base stations as v0  
-5. No fund custody / banking-licence path  
-6. **No live customer/org provisioning** until ToS + screening  
-7. **CPOS adapter post-counsel only** (stub disabled)  
-8. **No track histories** — GGA/last-position for session health only; metering = connect / bytes / device-days (no lat/lon)  
-9. No hardware / hosting-as-idea product framing  
+ToS draft + screening runbooks: `docs/tos-draft.md`, `docs/runbooks/screening-workflow.md`, `credential-rotate-revoke.md`, `org-suspend.md`. Self-serve signup remains closed; ops pilot path unlocks screened ICP-A tenants only.
 
 ---
 
-## Fixture-org only
-
-- Seeded fixture org id: `00000000-0000-4000-8000-000000000001`  
-- Extra fixture create: `ALLOW_FIXTURE_ORGS=true` (non-prod) + header `X-Allow-Fixture-Orgs: true` + body `{ "name": "...", "fixture": true }`  
-- Any **live** `POST /v0/orgs` → **403** `{ "error": "screening_required", ... }`  
-
-Proxy fixture Basic Auth (local only, not for prod): user `fixture-device` / pass `fixture-pass-not-for-prod`.
-
----
-
-## Layout
-
-```
-grokbot/
-  README.md
-  docs/
-    architecture.md
-    decision-record.md
-    deep-dive-summary.md
-    threat-screening-checklist.md
-    openapi/openapi.yaml
-  packages/
-    api/        # control plane HTTP skeleton
-    proxy/      # NTRIP proxy skeleton (listen + auth stub)
-    adapters/   # ntrip_basic + vendor stubs; cpos disabled
-  migrations/   # initial PG schema stubs
-```
-
----
-
-## Build / run / lint
+## Build / test
 
 ```bash
 npm install
-npm run build      # or: make build
-npm run lint       # or: make lint
-npm test           # or: make test
-npm run typecheck
-
-# Run (separate terminals)
-ALLOW_FIXTURE_ORGS=true npm run dev:api     # :8080
-npm run dev:proxy                           # :2101
+npm run build
+npm run lint
+npm test
+# optional: load test only
+npm run loadtest
 ```
 
-Quick checks:
+---
+
+## M2 runbook — demo failover
+
+Concrete steps: **`docs/runbooks/m2-failover-demo.md`**.
+
+Short version:
+
+1. Start API + proxy with shared `GROKBOT_STORE_PATH` and `VAULT_KEK`.
+2. Seed **two** fixture upstream secrets (primary + secondary).
+3. `POST /v0/orgs/{fixture}/profiles` with candidates priority 1 then 2; set `failover.unhealthy_after_ms` (0 for snappy demo; 30000 default).
+4. Provision device with that `profile_id`.
+5. `POST /v0/fixture/upstream-health` mark primary `unreachable` **or** kill primary mock caster.
+6. Connect NTRIP with pseudo-cred → secondary serves RTCM; check `GET .../audit?event_type=session.failover`.
+
+Automated: `packages/proxy` failover tests mock primary connect failure → secondary RTCM + audit.
+
+---
+
+## Key M2 endpoints
+
+```http
+POST   /v0/orgs/{org_id}/profiles
+GET    /v0/orgs/{org_id}/profiles
+GET    /v0/profiles/{profile_id}
+PUT    /v0/profiles/{profile_id}
+
+GET    /v0/orgs/{org_id}/health
+GET    /v0/upstreams/{upstream_id}/health
+GET    /v0/devices/{device_id}/health
+GET    /v0/orgs/{org_id}/sessions?status=active
+
+GET    /v0/orgs/{org_id}/audit?from=&to=&event_type=&device_id=&cursor=
+GET    /v0/orgs/{org_id}/usage/events?from=&to=&cursor=
+GET    /v0/orgs/{org_id}/usage/export?from=&to=&webhook_id=
+POST   /v0/orgs/{org_id}/usage/webhooks
+```
+
+OpenAPI: `docs/openapi/openapi.yaml`.
+
+---
+
+## Local env
 
 ```bash
-curl -s localhost:8080/healthz
-curl -s -X POST localhost:8080/v0/orgs -H 'content-type: application/json' \
-  -d '{"name":"Live Corp"}'   # expect 403 screening_required
+cp .env.example .env
+# Generate KEK:
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+export $(grep -v '^#' .env | xargs)
+rm -f "$GROKBOT_STORE_PATH"
+
+ALLOW_FIXTURE_ORGS=true VAULT_KEK=$VAULT_KEK GROKBOT_STORE_PATH=/tmp/grokbot-m2-store.json npm run dev:api
+ALLOW_FIXTURE_ORGS=true VAULT_KEK=$VAULT_KEK GROKBOT_STORE_PATH=/tmp/grokbot-m2-store.json npm run dev:proxy
 ```
 
-Apply migrations (when you have Postgres): `psql "$DATABASE_URL" -f migrations/001_initial.sql`
+PG migrations:
+
+```bash
+psql "$DATABASE_URL" -f migrations/001_initial.sql
+psql "$DATABASE_URL" -f migrations/002_m1_sessions.sql
+psql "$DATABASE_URL" -f migrations/003_m2_profiles_usage.sql
+```
 
 ---
 
-## Docs
+## Real vs still stub / gated
 
-- [`docs/architecture.md`](docs/architecture.md) — v0 architecture (copied from Builder workspace)  
-- [`docs/decision-record.md`](docs/decision-record.md) — locked product wedge  
-- [`docs/deep-dive-summary.md`](docs/deep-dive-summary.md) — summary of Scout deep-dive (full brief not vendored)  
-- [`docs/threat-screening-checklist.md`](docs/threat-screening-checklist.md) — M0 draft for Ops/counsel  
-- [`docs/openapi/openapi.yaml`](docs/openapi/openapi.yaml) — control API stub  
+| Component | Status |
+| --- | --- |
+| Vault AES-256-GCM | **Real** |
+| Device pseudo-cred (fixture) | **Real** |
+| Generic NTRIP adapter | **Real** |
+| Profile policy primary/secondary | **Real** |
+| Failover + hysteresis | **Real** |
+| Health / audit query / usage export | **Real** |
+| Load test 50 concurrent (provisional) | **Real** (automated) |
+| ToS draft + screening runbook | **Started** (docs only) |
+| Point One / GEODNET / Skylark / SmartNet | **Stub** |
+| CPOS | **Disabled** |
+| Live org POST | **403 screening_required** |
 
 ---
 
-*M0 skeleton. Implement M1 vertical slice next; keep screening + CPOS gates closed.*
+*M3 screening unlock & first pilots. Stack on M2 (`m2-failover-ops`). Self-serve still closed; CPOS still disabled; Point One/GEODNET spike deferred.*
+
+
+## M3 — screening unlock & first pilots
+
+- **Real screening gate:** `Org.status` becomes `active` only when `screening_status=cleared` via ops activate.
+- **No self-serve:** `POST /v0/orgs` (live) still `403 screening_required`.
+- **Pilot path (ICP A preferred):** `POST /v0/ops/pilot-orgs` → screening → activate (ops `X-Ops-Key`).
+- **RBAC:** org API keys with roles `admin` / `operator` / `read`.
+- **Runbooks:** `docs/runbooks/screening-workflow.md`, `credential-rotate-revoke.md`, `org-suspend.md`.
+- **Optional Point One / GEODNET adapter spike:** **deferred** (keep M3 tight; stubs remain).
+- **CPOS:** still DISABLED / not in routable registry (no counsel clearance).
+
+**Merge order:** PR #1 `m0-skeleton` → `main`, then #2 `m1-generic-ntrip` → `m0-skeleton`, then #3 `m2-failover-ops` → `m1-generic-ntrip`, then **this PR #4** `m3-screening-pilots` → `m2-failover-ops`.

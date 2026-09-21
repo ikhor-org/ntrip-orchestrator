@@ -1,18 +1,22 @@
 openapi: 3.0.3
 info:
   title: grokbot Control API
-  version: 0.0.0-m0
+  version: 0.3.0-m3
   description: |
-    M0 OpenAPI stub for GNSS RTK OEM/fleet correction orchestration.
+    M3 control API for GNSS RTK OEM/fleet correction orchestration.
+    Profile policy primary/secondary + failover hysteresis; health/audit/usage APIs.
     Live org provisioning is gated: POST /v0/orgs without screening → 403 screening_required.
     Fixture orgs only in non-prod when ALLOW_FIXTURE_ORGS=true.
     No fund custody, no location analytics in metering, no CPOS routing.
+    Load test target (provisional, O8 OPEN): 50 concurrent mocked sessions.
 servers:
   - url: http://localhost:8080
-    description: Local M0 skeleton
+    description: Local M3
 tags:
   - name: orgs
   - name: devices
+  - name: profiles
+  - name: vault
   - name: health
   - name: audit
   - name: usage
@@ -22,12 +26,12 @@ paths:
       tags: [health]
       summary: Process liveness
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Healthz'
+                $ref: "#/components/schemas/Healthz"
   /v0/orgs:
     post:
       tags: [orgs]
@@ -42,26 +46,26 @@ paths:
           required: false
           schema:
             type: string
-            enum: ['true']
+            enum: ["true"]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrgCreate'
+              $ref: "#/components/schemas/OrgCreate"
       responses:
-        '201':
+        "201":
           description: Fixture org created (non-prod only)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Org'
-        '403':
+                $ref: "#/components/schemas/Org"
+        "403":
           description: Live org create blocked pending screening
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
               examples:
                 screening_required:
                   value:
@@ -70,150 +74,480 @@ paths:
   /v0/orgs/{org_id}:
     get:
       tags: [orgs]
-      summary: Get org (stub)
+      summary: Get org
       parameters:
-        - $ref: '#/components/parameters/OrgId'
+        - $ref: "#/components/parameters/OrgId"
       responses:
-        '200':
+        "200":
           description: Org
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Org'
-        '404':
+                $ref: "#/components/schemas/Org"
+        "404":
           description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
   /v0/orgs/{org_id}/devices:
     get:
       tags: [devices]
-      summary: List devices (stub)
+      summary: List devices
       parameters:
-        - $ref: '#/components/parameters/OrgId'
+        - $ref: "#/components/parameters/OrgId"
       responses:
-        '200':
+        "200":
           description: Device list
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  devices:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Device'
     post:
       tags: [devices]
-      summary: Provision device (stub — fixture org only in M0)
+      summary: Provision device (fixture org only)
       parameters:
-        - $ref: '#/components/parameters/OrgId'
+        - $ref: "#/components/parameters/OrgId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DeviceCreate'
+              $ref: "#/components/schemas/DeviceCreate"
       responses:
-        '501':
-          description: Not implemented until M1 vertical slice
+        "201":
+          description: Device provisioned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/DeviceProvisioned"
+        "403":
+          description: Not a fixture org / fixtures disabled
   /v0/devices/{device_id}:
     get:
       tags: [devices]
-      summary: Get device (stub)
+      summary: Get device
       parameters:
-        - $ref: '#/components/parameters/DeviceId'
+        - $ref: "#/components/parameters/DeviceId"
       responses:
-        '501':
-          description: Not implemented until M1
+        "200":
+          description: Device
+        "404":
+          description: Not found
+  /v0/orgs/{org_id}/profiles:
+    get:
+      tags: [profiles]
+      summary: List route profiles
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+      responses:
+        "200":
+          description: Profiles
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                type: object
+                properties:
+                  profiles:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Profile"
+    post:
+      tags: [profiles]
+      summary: Create profile with primary/secondary candidates
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+  /v0/profiles/{profile_id}:
+    get:
+      tags: [profiles]
+      summary: Get profile
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+    put:
+      tags: [profiles]
+      summary: Replace candidates + failover policy
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileCreate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+  /v0/fixture/upstream-secret:
+    post:
+      tags: [vault]
+      summary: Seed fixture upstream + vault secret (dev)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpstreamSecretCreate"
+      responses:
+        "201":
+          description: Created
+  /v0/fixture/upstream-health:
+    post:
+      tags: [health]
+      summary: Mark upstream health (dev / failover demo)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [upstream_id, status]
+              properties:
+                upstream_id: { type: string, format: uuid }
+                status:
+                  type: string
+                  enum: [ok, degraded, unreachable, unknown]
+                reachable: { type: boolean }
+                last_error: { type: string }
+      responses:
+        "200":
+          description: Health snapshot
+  /v0/orgs/{org_id}/upstreams:
+    get:
+      tags: [vault]
+      summary: List upstreams + vault metadata (no plaintext)
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+      responses:
+        "200":
+          description: Upstream list
   /v0/orgs/{org_id}/health:
     get:
       tags: [health]
-      summary: Org health rollup (stub)
+      summary: Org health rollup
       description: |
-        Health/SLA only. GGA/last-position may appear as last_gga_age_ms for live sessions —
-        not retained as track histories.
+        Health/SLA only. last_gga_age_ms for live sessions —
+        last position is ephemeral and dropped on session end (not track history).
       parameters:
-        - $ref: '#/components/parameters/OrgId'
+        - $ref: "#/components/parameters/OrgId"
       responses:
-        '200':
-          description: Health stub
+        "200":
+          description: Health
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrgHealth'
+                $ref: "#/components/schemas/OrgHealth"
+  /v0/upstreams/{upstream_id}/health:
+    get:
+      tags: [health]
+      summary: Upstream health
+      parameters:
+        - $ref: "#/components/parameters/UpstreamId"
+      responses:
+        "200":
+          description: Upstream health
+  /v0/devices/{device_id}/health:
+    get:
+      tags: [health]
+      summary: Device session health
+      description: Ephemeral GGA/last-position for live session only — no tracks.
+      parameters:
+        - $ref: "#/components/parameters/DeviceId"
+      responses:
+        "200":
+          description: Device health
+  /v0/orgs/{org_id}/sessions:
+    get:
+      tags: [health]
+      summary: Active sessions
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active]
+      responses:
+        "200":
+          description: Active sessions
   /v0/orgs/{org_id}/audit:
     get:
       tags: [audit]
-      summary: Audit query hook (stub)
+      summary: Audit query
       parameters:
-        - $ref: '#/components/parameters/OrgId'
+        - $ref: "#/components/parameters/OrgId"
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: event_type
+          in: query
+          schema: { type: string }
+        - name: device_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer }
       responses:
-        '501':
-          description: Not implemented until M2
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+        "200":
+          description: Filtered audit events
   /v0/orgs/{org_id}/usage/events:
     get:
       tags: [usage]
-      summary: Metering events (stub)
+      summary: Metering events
       description: |
         Metering fields are connect/bytes/device-days only.
         Schemas MUST NOT include lat, lon, GGA, or track points.
       parameters:
-        - $ref: '#/components/parameters/OrgId'
+        - $ref: "#/components/parameters/OrgId"
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: cursor
+          in: query
+          schema: { type: string }
       responses:
-        '501':
-          description: Not implemented until M1 writers
+        "200":
+          description: Metering events
+  /v0/orgs/{org_id}/usage/export:
+    get:
+      tags: [usage]
+      summary: Usage export bundle (optional HMAC signature)
+      description: |
+        Export metering events for billing. No location fields.
+        If webhook_id is set, includes HMAC-SHA256 signature over exported_at + "." + body.
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: webhook_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Export bundle
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/UsageExport"
+  /v0/orgs/{org_id}/usage/webhooks:
+    post:
+      tags: [usage]
+      summary: Register signed usage webhook sink
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri }
+                secret: { type: string }
+      responses:
+        "201":
+          description: Webhook registered (secret returned once)
+  /v0/ops/pilot-orgs:
+    post:
+      tags: [orgs]
+      summary: Ops pilot intake (no self-serve)
+      description: |
+        Creates org in pending_screening. Prefer ICP A (Nordic construction machine-control SI/OEM).
+        Requires X-Ops-Key. Does not activate.
+      parameters:
+        - name: X-Ops-Key
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, country, end_use_representation]
+              properties:
+                name: { type: string }
+                country: { type: string }
+                icp_segment: { type: string, enum: [A, B, C, other] }
+                end_use_representation: { type: string }
+                notes: { type: string }
+      responses:
+        "201":
+          description: Pilot candidate created (pending_screening)
+        "401":
+          description: Missing/invalid ops key
+  /v0/orgs/{org_id}/screening:
+    post:
+      tags: [orgs]
+      summary: Record screening result (ops)
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - name: X-Ops-Key
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [result]
+              properties:
+                result: { type: string, enum: [pending, cleared, rejected] }
+                screening_reference: { type: string }
+                prohibited_use_attested: { type: boolean }
+                sanctions_cleared: { type: boolean }
+                upstream_tos_acknowledged: { type: boolean }
+                end_use_representation: { type: string }
+      responses:
+        "200":
+          description: Screening recorded
+        "400":
+          description: Cleared missing attestations
+  /v0/orgs/{org_id}/activate:
+    post:
+      tags: [orgs]
+      summary: Activate approved pilot (ops)
+      description: Requires screening_status=cleared. Audited. No auto-approve of random signups.
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - name: X-Ops-Key
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Org active
+        "403":
+          description: screening_required or suspended
+  /v0/orgs/{org_id}/suspend:
+    post:
+      tags: [orgs]
+      summary: Suspend org (ops or org admin)
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        "200":
+          description: Suspended
+  /v0/orgs/{org_id}/api-keys:
+    post:
+      tags: [orgs]
+      summary: Create org API key (ops or admin)
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role: { type: string, enum: [admin, operator, read] }
+                label: { type: string }
+      responses:
+        "201":
+          description: Key created (plaintext once)
+        "403":
+          description: Role forbidden
+    get:
+      tags: [orgs]
+      summary: List org API keys (no secrets)
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+      responses:
+        "200":
+          description: Key metadata list
+  /v0/orgs/{org_id}/api-keys/{key_id}/revoke:
+    post:
+      tags: [orgs]
+      summary: Revoke API key
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - name: key_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Revoked
+
 components:
   parameters:
     OrgId:
       name: org_id
       in: path
       required: true
-      schema:
-        type: string
-        format: uuid
+      schema: { type: string, format: uuid }
     DeviceId:
       name: device_id
       in: path
       required: true
-      schema:
-        type: string
-        format: uuid
+      schema: { type: string, format: uuid }
+    ProfileId:
+      name: profile_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UpstreamId:
+      name: upstream_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
   schemas:
     Healthz:
       type: object
       required: [ok, service]
       properties:
-        ok:
-          type: boolean
-        service:
+        ok: { type: boolean }
+        service: { type: string }
+        milestone: { type: string, example: M3 }
+        load_test_target_concurrent_sessions: { type: integer, example: 50 }
+        load_test_target_label:
           type: string
-        milestone:
-          type: string
-          example: M0
+          example: provisional (architecture O8 OPEN)
     OrgCreate:
       type: object
       required: [name]
       properties:
-        name:
-          type: string
+        name: { type: string }
         fixture:
           type: boolean
           description: If true, only accepted with fixture header in non-prod
@@ -221,11 +555,8 @@ components:
       type: object
       required: [id, name, status, screening_status]
       properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
+        id: { type: string, format: uuid }
+        name: { type: string }
         status:
           type: string
           enum: [fixture, pending_screening, active, suspended]
@@ -235,46 +566,116 @@ components:
     DeviceCreate:
       type: object
       properties:
-        label:
-          type: string
-        profile_id:
-          type: string
-          format: uuid
+        label: { type: string }
+        profile_id: { type: string, format: uuid }
     Device:
       type: object
       properties:
-        id:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        profile_id: { type: string, format: uuid }
+        label: { type: string }
+        status: { type: string, enum: [active, revoked] }
+    DeviceProvisioned:
+      type: object
+      required: [device, pseudo_username, pseudo_password]
+      properties:
+        device: { $ref: "#/components/schemas/Device" }
+        pseudo_username: { type: string }
+        pseudo_password:
           type: string
-          format: uuid
-        org_id:
+          description: Returned once — never stored in plaintext
+    ProfileCandidate:
+      type: object
+      required: [priority, upstream_endpoint_id]
+      properties:
+        priority: { type: integer, minimum: 1 }
+        upstream_endpoint_id: { type: string, format: uuid }
+        mountpoint_override: { type: string }
+        min_health: { type: string, enum: [ok] }
+    FailoverPolicy:
+      type: object
+      properties:
+        unhealthy_after_ms: { type: integer, default: 30000 }
+        max_switches_per_hour: { type: integer, default: 10 }
+        on_exhaust:
           type: string
-          format: uuid
-        label:
-          type: string
-        status:
-          type: string
-          enum: [active, revoked]
+          enum: [reject, keep_last_best_effort]
+    ProfileCreate:
+      type: object
+      required: [name, candidates]
+      properties:
+        name: { type: string }
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/ProfileCandidate" }
+        failover: { $ref: "#/components/schemas/FailoverPolicy" }
+        datum_tag: { type: string }
+        epoch_tag: { type: string }
+    Profile:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        name: { type: string }
+        policy_json:
+          type: object
+          properties:
+            candidates:
+              type: array
+              items: { $ref: "#/components/schemas/ProfileCandidate" }
+            failover: { $ref: "#/components/schemas/FailoverPolicy" }
+        datum_tag: { type: string }
+        epoch_tag: { type: string }
+        created_at: { type: string, format: date-time }
+    UpstreamSecretCreate:
+      type: object
+      required: [host, username, password]
+      properties:
+        display_name: { type: string }
+        host: { type: string }
+        port: { type: integer, default: 2101 }
+        use_tls: { type: boolean }
+        mountpoint: { type: string }
+        username: { type: string }
+        password: { type: string }
     OrgHealth:
       type: object
       properties:
-        org_id:
-          type: string
-          format: uuid
-        active_sessions:
-          type: integer
-        # last_gga_age_ms is health-only; do not retain tracks
+        org_id: { type: string, format: uuid }
+        active_sessions: { type: integer }
+        sessions:
+          type: array
+          items:
+            type: object
+            properties:
+              session_id: { type: string, format: uuid }
+              device_id: { type: string, format: uuid }
+              upstream_id: { type: string, format: uuid }
+              failover_count: { type: integer }
+              last_gga_age_ms: { type: integer, nullable: true }
+              has_last_position: { type: boolean }
+        upstreams: { type: array, items: { type: object } }
         notes:
           type: string
           example: GGA/last-position for session health only — no track histories
+    UsageExport:
+      type: object
+      description: Metering export — connect/bytes/device-days only; no lat/lon
+      properties:
+        org_id: { type: string, format: uuid }
+        exported_at: { type: string, format: date-time }
+        event_count: { type: integer }
+        events: { type: array, items: { type: object } }
+        location_fields: { type: string, enum: [forbidden] }
+        signature: { type: string }
+        signature_alg: { type: string, example: HMAC-SHA256 }
     Error:
       type: object
       required: [error, message]
       properties:
-        error:
-          type: string
-        message:
-          type: string
-    # Metering event shapes (documentation only for M0 — no lat/lon)
+        error: { type: string }
+        message: { type: string }
     MeteringSessionStarted:
       type: object
       description: usage.session_started — no location fields

@@ -11,6 +11,7 @@ export type SessionState =
   | 'closed';
 
 export interface ProxySession {
+  id: string;
   deviceId: string;
   orgId: string;
   profileId?: string;
@@ -20,6 +21,9 @@ export interface ProxySession {
   bytesIn: number;
   bytesOut: number;
   startedAt: Date;
+  failoverCount: number;
   /** Health-only; overwrite/drop on session end — no track history. */
   lastGgaAt?: Date;
+  /** Ephemeral; drop on session end. */
+  lastPosition?: { lat: number; lon: number };
 }
