@@ -1,0 +1,14 @@
+{
+  "name": "@grokbot/proxy",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@grokbot/adapters": "0.0.0"
+  }
+}

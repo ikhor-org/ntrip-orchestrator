@@ -1,0 +1,27 @@
+{
+  "name": "grokbot",
+  "version": "0.0.0",
+  "private": true,
+  "description": "M0 skeleton \u2014 GNSS RTK OEM/fleet correction orchestration",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @grokbot/adapters && npm run build -w @grokbot/api && npm run build -w @grokbot/proxy",
+    "lint": "eslint \"packages/*/src/**/*.ts\"",
+    "test": "npm run build && node --test packages/api/dist/smoke.test.js packages/proxy/dist/smoke.test.js packages/adapters/dist/smoke.test.js",
+    "typecheck": "tsc -b packages/adapters packages/api packages/proxy",
+    "dev:api": "npm run start -w @grokbot/api",
+    "dev:proxy": "npm run start -w @grokbot/proxy"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
