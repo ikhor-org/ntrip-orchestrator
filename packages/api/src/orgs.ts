@@ -281,7 +281,8 @@ export function recordScreening(
 }
 
 /**
- * Ops: activate approved pilot. Requires screening_status=cleared.
+ * Ops: activate approved pilot. Requires screening_status=cleared
+ * AND attestation flags still true (re-checked at activation time).
  */
 export function activateOrg(
   store: Store,
@@ -314,13 +315,37 @@ export function activateOrg(
       },
     };
   }
-  if (!canActivateOrg(org)) {
+  if (org.screening_status !== 'cleared') {
     return {
       status: 403,
       body: {
         error: 'screening_required',
         message:
           'Org cannot become active unless screening_status=cleared (architecture §10.3)',
+      },
+    };
+  }
+  if (
+    org.prohibited_use_attested !== true ||
+    org.sanctions_cleared !== true ||
+    org.upstream_tos_acknowledged !== true
+  ) {
+    return {
+      status: 403,
+      body: {
+        error: 'attestation_required',
+        message:
+          'Activation rejected: prohibited_use_attested, sanctions_cleared, and upstream_tos_acknowledged must still be true (not only screening_status=cleared)',
+      },
+    };
+  }
+  if (!canActivateOrg(org)) {
+    return {
+      status: 403,
+      body: {
+        error: 'screening_required',
+        message:
+          'Org cannot become active unless screening_status=cleared with attestations (architecture §10.3)',
       },
     };
   }

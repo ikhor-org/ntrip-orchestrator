@@ -170,6 +170,58 @@ export function requireOps(actor: AuthActor): AuthFail | null {
   };
 }
 
+/** Fixture org (non-prod) — may keep unauthenticated fixture-dev allowances. */
+export function isFixtureOrg(org: {
+  status: string;
+  screening_status: string;
+}): boolean {
+  return org.status === 'fixture' || org.screening_status === 'fixture_exempt';
+}
+
+/**
+ * Device / org-scoped route auth:
+ * - Fixture orgs with ALLOW_FIXTURE_ORGS may use fixture_dev (no key).
+ * - Active / production orgs always require a valid org API key (or ops).
+ *   No unauthenticated fallback.
+ */
+export async function resolveOrgScopedAuth(
+  store: Store,
+  headers: Record<string, string | string[] | undefined>,
+  opts: {
+    opsApiKey?: string;
+    allowFixtureOrgs: boolean;
+  },
+  org: { id: string; status: string; screening_status: string },
+  need: ApiKeyRole,
+): Promise<AuthResult> {
+  const fixture = isFixtureOrg(org);
+  const allowFixturePath = opts.allowFixtureOrgs && fixture;
+  const auth = await resolveAuth(store, headers, {
+    opsApiKey: opts.opsApiKey,
+    allowFixtureDev: allowFixturePath,
+    requireAuth: !allowFixturePath,
+  });
+  if (!auth.ok) return auth;
+  if (auth.actor.kind === 'ops') return auth;
+  if (auth.actor.kind === 'fixture_dev') {
+    if (!allowFixturePath) {
+      return {
+        ok: false,
+        status: 401,
+        body: {
+          error: 'unauthorized',
+          message:
+            'API key required (Authorization: Bearer, X-Api-Key, or X-Ops-Key)',
+        },
+      };
+    }
+    return auth;
+  }
+  const roleDeny = requireRole(auth.actor, need, org.id);
+  if (roleDeny) return roleDeny;
+  return auth;
+}
+
 export function actorAuditFields(actor: AuthActor): {
   actor_type: string;
   actor_id: string;

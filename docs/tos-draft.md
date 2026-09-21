@@ -2,9 +2,9 @@
 
 | Field | Value |
 | --- | --- |
-| **Status** | **DRAFT** — does **not** unlock live org onboarding |
+| **Status** | **DRAFT** — not production ToS; does **not** unlock self-serve onboarding |
 | **Date** | 21 Sep 2026 (Europe/Oslo) |
-| **Effect** | Draft still counsel-bound; M3 ops pilot path uses these representations as screening hooks |
+| **Effect** | Remains draft until counsel signs. Pilots are **ops-curated** and use these representations as screening hooks only — do not claim a published/production ToS. |
 
 > Engineering gate remains: `POST /v0/orgs` (live) → `403 screening_required`.
 > This draft does **not** change that gate.
@@ -52,8 +52,10 @@ Customer represents lawful **civil / commercial** end use, including for example
 
 ## 7. Screening before live tenants (draft)
 
-Live org activation requires end-use / sanctions screening clearance. See `docs/runbooks/screening-workflow.md`. Until that process is live, only fixture/dev orgs are supported.
+Live org activation requires end-use / sanctions screening clearance. See `docs/runbooks/screening-workflow.md`. Self-serve signup remains closed.
+
+**Pilots are ops-curated until counsel signs this ToS.** Ops may intake / screen / activate carefully selected ICP-A pilots under draft representations; that is not publication of a production Terms of Service.
 
 ---
 
-*DRAFT — counsel review required before publication or M3 unlock.*
+*DRAFT — counsel must sign before publication. Do not claim production ToS. Ops-curated pilots only until then.*

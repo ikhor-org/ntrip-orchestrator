@@ -254,11 +254,14 @@ export function orgIsUsable(org: Org): boolean {
   return org.status === 'active' && org.screening_status === 'cleared';
 }
 
-/** Engineering gate: active requires cleared screening. */
+/** Engineering gate: active requires cleared screening + attestations still true. */
 export function canActivateOrg(org: Org): boolean {
   return (
     org.screening_status === 'cleared' &&
     org.status !== 'suspended' &&
-    org.status !== 'fixture'
+    org.status !== 'fixture' &&
+    org.prohibited_use_attested === true &&
+    org.sanctions_cleared === true &&
+    org.upstream_tos_acknowledged === true
   );
 }

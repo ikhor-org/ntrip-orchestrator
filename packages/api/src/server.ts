@@ -30,6 +30,7 @@ import {
   requireOps,
   requireRole,
   resolveAuth,
+  resolveOrgScopedAuth,
 } from './auth.js';
 import {
   createProfile,
@@ -403,6 +404,21 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
           });
           return;
         }
+        // Active/pilot orgs require org API key; fixture may keep fixture-dev path.
+        const auth = await resolveOrgScopedAuth(
+          store,
+          req.headers,
+          {
+            opsApiKey: config.opsApiKey,
+            allowFixtureOrgs: config.allowFixtureOrgs,
+          },
+          org,
+          'read',
+        );
+        if (!auth.ok) {
+          sendJson(res, auth.status, auth.body);
+          return;
+        }
         sendJson(res, 200, { devices: store.listDevices(org.id) });
         return;
       }
@@ -414,16 +430,35 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
         /^\/v0\/orgs\/([^/]+)\/devices$/,
       );
       if (devicesPost) {
+        const orgId = devicesPost[1]!;
+        const org = getOrg(store, orgId);
+        if (!org) {
+          sendJson(res, 404, {
+            error: 'not_found',
+            message: 'org not found',
+          });
+          return;
+        }
+        // Active/pilot orgs require org API key; fixture may keep fixture-dev path.
+        const auth = await resolveOrgScopedAuth(
+          store,
+          req.headers,
+          {
+            opsApiKey: config.opsApiKey,
+            allowFixtureOrgs: config.allowFixtureOrgs,
+          },
+          org,
+          'operator',
+        );
+        if (!auth.ok) {
+          sendJson(res, auth.status, auth.body);
+          return;
+        }
         const raw = (await readJson(req)) as {
           label?: string;
           profile_id?: string;
         };
-        const result = await provisionDevice(
-          store,
-          config,
-          devicesPost[1]!,
-          raw,
-        );
+        const result = await provisionDevice(store, config, orgId, raw);
         sendJson(res, result.status, result.body);
         return;
       }
@@ -441,6 +476,28 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
             error: 'not_found',
             message: 'device not found',
           });
+          return;
+        }
+        const org = getOrg(store, device.org_id);
+        if (!org) {
+          sendJson(res, 404, {
+            error: 'not_found',
+            message: 'org not found',
+          });
+          return;
+        }
+        const auth = await resolveOrgScopedAuth(
+          store,
+          req.headers,
+          {
+            opsApiKey: config.opsApiKey,
+            allowFixtureOrgs: config.allowFixtureOrgs,
+          },
+          org,
+          'read',
+        );
+        if (!auth.ok) {
+          sendJson(res, auth.status, auth.body);
           return;
         }
         sendJson(res, 200, device);
