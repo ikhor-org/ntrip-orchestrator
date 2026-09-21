@@ -1,0 +1,303 @@
+openapi: 3.0.3
+info:
+  title: grokbot Control API
+  version: 0.0.0-m0
+  description: |
+    M0 OpenAPI stub for GNSS RTK OEM/fleet correction orchestration.
+    Live org provisioning is gated: POST /v0/orgs without screening → 403 screening_required.
+    Fixture orgs only in non-prod when ALLOW_FIXTURE_ORGS=true.
+    No fund custody, no location analytics in metering, no CPOS routing.
+servers:
+  - url: http://localhost:8080
+    description: Local M0 skeleton
+tags:
+  - name: orgs
+  - name: devices
+  - name: health
+  - name: audit
+  - name: usage
+paths:
+  /healthz:
+    get:
+      tags: [health]
+      summary: Process liveness
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Healthz'
+  /v0/orgs:
+    post:
+      tags: [orgs]
+      summary: Create org (gated)
+      description: |
+        Live org create requires screening readiness.
+        Without it, returns 403 with error code screening_required.
+        Fixture create allowed only in non-prod with X-Allow-Fixture-Orgs: true and body.fixture=true.
+      parameters:
+        - name: X-Allow-Fixture-Orgs
+          in: header
+          required: false
+          schema:
+            type: string
+            enum: ['true']
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrgCreate'
+      responses:
+        '201':
+          description: Fixture org created (non-prod only)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Org'
+        '403':
+          description: Live org create blocked pending screening
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                screening_required:
+                  value:
+                    error: screening_required
+                    message: Live org provisioning requires end-use/sanctions screening before activation.
+  /v0/orgs/{org_id}:
+    get:
+      tags: [orgs]
+      summary: Get org (stub)
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Org
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Org'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v0/orgs/{org_id}/devices:
+    get:
+      tags: [devices]
+      summary: List devices (stub)
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Device list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+    post:
+      tags: [devices]
+      summary: Provision device (stub — fixture org only in M0)
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCreate'
+      responses:
+        '501':
+          description: Not implemented until M1 vertical slice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v0/devices/{device_id}:
+    get:
+      tags: [devices]
+      summary: Get device (stub)
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '501':
+          description: Not implemented until M1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v0/orgs/{org_id}/health:
+    get:
+      tags: [health]
+      summary: Org health rollup (stub)
+      description: |
+        Health/SLA only. GGA/last-position may appear as last_gga_age_ms for live sessions —
+        not retained as track histories.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Health stub
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgHealth'
+  /v0/orgs/{org_id}/audit:
+    get:
+      tags: [audit]
+      summary: Audit query hook (stub)
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '501':
+          description: Not implemented until M2
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v0/orgs/{org_id}/usage/events:
+    get:
+      tags: [usage]
+      summary: Metering events (stub)
+      description: |
+        Metering fields are connect/bytes/device-days only.
+        Schemas MUST NOT include lat, lon, GGA, or track points.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '501':
+          description: Not implemented until M1 writers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  parameters:
+    OrgId:
+      name: org_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DeviceId:
+      name: device_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    Healthz:
+      type: object
+      required: [ok, service]
+      properties:
+        ok:
+          type: boolean
+        service:
+          type: string
+        milestone:
+          type: string
+          example: M0
+    OrgCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        fixture:
+          type: boolean
+          description: If true, only accepted with fixture header in non-prod
+    Org:
+      type: object
+      required: [id, name, status, screening_status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum: [fixture, pending_screening, active, suspended]
+        screening_status:
+          type: string
+          enum: [required, pending, cleared, rejected, fixture_exempt]
+    DeviceCreate:
+      type: object
+      properties:
+        label:
+          type: string
+        profile_id:
+          type: string
+          format: uuid
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        status:
+          type: string
+          enum: [active, revoked]
+    OrgHealth:
+      type: object
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        active_sessions:
+          type: integer
+        # last_gga_age_ms is health-only; do not retain tracks
+        notes:
+          type: string
+          example: GGA/last-position for session health only — no track histories
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+    # Metering event shapes (documentation only for M0 — no lat/lon)
+    MeteringSessionStarted:
+      type: object
+      description: usage.session_started — no location fields
+      properties:
+        org_id: { type: string, format: uuid }
+        device_id: { type: string, format: uuid }
+        session_id: { type: string, format: uuid }
+        upstream_id: { type: string, format: uuid }
+        ts: { type: string, format: date-time }
+    MeteringSessionEnded:
+      type: object
+      description: usage.session_ended — connect/bytes only
+      properties:
+        session_id: { type: string, format: uuid }
+        duration_ms: { type: integer }
+        bytes_up: { type: integer }
+        bytes_down: { type: integer }
+        end_reason: { type: string }
+    MeteringDeviceDay:
+      type: object
+      description: usage.device_day — no location fields
+      properties:
+        org_id: { type: string, format: uuid }
+        device_id: { type: string, format: uuid }
+        day: { type: string, format: date }
+        active_seconds: { type: integer }
