@@ -1,10 +1,16 @@
 import http from 'node:http';
 import { listRoutableAdapters } from '@grokbot/adapters';
-import { loadConfig } from './config.js';
+import {
+  FIXTURE_ORG_ID,
+  getDefaultStore,
+  parseKek,
+  setDefaultStore,
+  Store,
+} from '@grokbot/core';
+import { ApiConfig, loadConfig } from './config.js';
+import { provisionDevice } from './devices.js';
 import { createOrg, getOrg, seedFixtureOrg } from './orgs.js';
-
-const config = loadConfig();
-seedFixtureOrg();
+import { seedFixtureUpstreamSecret } from './vault_admin.js';
 
 function sendJson(
   res: http.ServerResponse,
@@ -48,7 +54,17 @@ function match(
   return url.split('?')[0]?.match(pattern) ?? null;
 }
 
-export function createServer(): http.Server {
+export interface CreateServerOptions {
+  store?: Store;
+  config?: ApiConfig;
+}
+
+export function createServer(opts: CreateServerOptions = {}): http.Server {
+  const config = opts.config ?? loadConfig();
+  const store = opts.store ?? getDefaultStore();
+  if (opts.store) setDefaultStore(opts.store);
+  seedFixtureOrg(store);
+
   return http.createServer(async (req, res) => {
     const method = req.method ?? 'GET';
     const url = req.url ?? '/';
@@ -58,8 +74,9 @@ export function createServer(): http.Server {
         sendJson(res, 200, {
           ok: true,
           service: 'grokbot-api',
-          milestone: 'M0',
+          milestone: 'M1',
           routable_adapters: listRoutableAdapters().map((a) => a.type),
+          fixture_org_id: FIXTURE_ORG_ID,
         });
         return;
       }
@@ -69,16 +86,16 @@ export function createServer(): http.Server {
           name?: string;
           fixture?: boolean;
         };
-        const allowHeader =
-          req.headers['x-allow-fixture-orgs'] === 'true';
-        const result = createOrg(config, raw, allowHeader);
+        const allowHeader = req.headers['x-allow-fixture-orgs'] === 'true';
+        const result = createOrg(store, config, raw, allowHeader);
+        if (result.status === 201) await store.persist();
         sendJson(res, result.status, result.body);
         return;
       }
 
       const orgGet = match(method, url, 'GET', /^\/v0\/orgs\/([^/]+)$/);
       if (orgGet) {
-        const org = getOrg(orgGet[1]!);
+        const org = getOrg(store, orgGet[1]!);
         if (!org) {
           sendJson(res, 404, {
             error: 'not_found',
@@ -97,7 +114,7 @@ export function createServer(): http.Server {
         /^\/v0\/orgs\/([^/]+)\/devices$/,
       );
       if (devicesList) {
-        const org = getOrg(devicesList[1]!);
+        const org = getOrg(store, devicesList[1]!);
         if (!org) {
           sendJson(res, 404, {
             error: 'not_found',
@@ -105,7 +122,7 @@ export function createServer(): http.Server {
           });
           return;
         }
-        sendJson(res, 200, { devices: [] });
+        sendJson(res, 200, { devices: store.listDevices(org.id) });
         return;
       }
 
@@ -116,10 +133,101 @@ export function createServer(): http.Server {
         /^\/v0\/orgs\/([^/]+)\/devices$/,
       );
       if (devicesPost) {
-        sendJson(res, 501, {
-          error: 'not_implemented',
-          message: 'Device provisioning lands in M1 vertical slice',
+        const raw = (await readJson(req)) as {
+          label?: string;
+          profile_id?: string;
+        };
+        const result = await provisionDevice(
+          store,
+          config,
+          devicesPost[1]!,
+          raw,
+        );
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+      const deviceGet = match(
+        method,
+        url,
+        'GET',
+        /^\/v0\/devices\/([^/]+)$/,
+      );
+      if (deviceGet) {
+        const device = store.getDevice(deviceGet[1]!);
+        if (!device) {
+          sendJson(res, 404, {
+            error: 'not_found',
+            message: 'device not found',
+          });
+          return;
+        }
+        sendJson(res, 200, device);
+        return;
+      }
+
+      // Seed fixture upstream + vault secret (admin/dev)
+      if (match(method, url, 'POST', /^\/v0\/fixture\/upstream-secret$/)) {
+        const raw = (await readJson(req)) as {
+          display_name?: string;
+          host?: string;
+          port?: number;
+          use_tls?: boolean;
+          mountpoint?: string;
+          username?: string;
+          password?: string;
+        };
+        const result = seedFixtureUpstreamSecret(store, config, {
+          display_name: raw.display_name,
+          host: raw.host ?? '',
+          port: raw.port,
+          use_tls: raw.use_tls,
+          mountpoint: raw.mountpoint,
+          username: raw.username ?? '',
+          password: raw.password ?? '',
         });
+        if (result.status === 201) await store.persist();
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+      const vaultList = match(
+        method,
+        url,
+        'GET',
+        /^\/v0\/orgs\/([^/]+)\/upstreams$/,
+      );
+      if (vaultList) {
+        const org = getOrg(store, vaultList[1]!);
+        if (!org) {
+          sendJson(res, 404, {
+            error: 'not_found',
+            message: 'org not found',
+          });
+          return;
+        }
+        const upstreams = store.listUpstreams(org.id).map((u) => {
+          const sec = store.getVaultSecret(u.id);
+          return {
+            id: u.id,
+            adapter_type: u.adapter_type,
+            display_name: u.display_name,
+            host: u.host,
+            port: u.port,
+            use_tls: u.use_tls,
+            default_mountpoint: u.default_mountpoint,
+            enabled: u.enabled,
+            secret: sec
+              ? {
+                  id: sec.id,
+                  secret_type: sec.secret_type,
+                  last4: sec.last4,
+                  key_version: sec.key_version,
+                }
+              : null,
+          };
+        });
+        sendJson(res, 200, { upstreams });
         return;
       }
 
@@ -130,11 +238,81 @@ export function createServer(): http.Server {
         /^\/v0\/orgs\/([^/]+)\/health$/,
       );
       if (health) {
+        const orgId = health[1]!;
+        const sessions = store.liveSessionsForOrg(orgId).map((s) => ({
+          session_id: s.session_id,
+          device_id: s.device_id,
+          upstream_id: s.upstream_id,
+          started_at: s.started_at,
+          last_gga_age_ms: s.last_gga_at
+            ? Date.now() - Date.parse(s.last_gga_at)
+            : null,
+          // Ephemeral last_position exposed for live health only — not metering
+          has_last_position: Boolean(s.last_position),
+        }));
         sendJson(res, 200, {
-          org_id: health[1],
-          active_sessions: 0,
+          org_id: orgId,
+          active_sessions: sessions.length,
+          sessions,
           notes:
             'GGA/last-position for session health only — no track histories; metering = connect/bytes/device-days only',
+        });
+        return;
+      }
+
+      const auditGet = match(
+        method,
+        url,
+        'GET',
+        /^\/v0\/orgs\/([^/]+)\/audit$/,
+      );
+      if (auditGet) {
+        const org = getOrg(store, auditGet[1]!);
+        if (!org) {
+          sendJson(res, 404, {
+            error: 'not_found',
+            message: 'org not found',
+          });
+          return;
+        }
+        sendJson(res, 200, { events: store.listAudit(org.id) });
+        return;
+      }
+
+      const usageGet = match(
+        method,
+        url,
+        'GET',
+        /^\/v0\/orgs\/([^/]+)\/usage\/events$/,
+      );
+      if (usageGet) {
+        const org = getOrg(store, usageGet[1]!);
+        if (!org) {
+          sendJson(res, 404, {
+            error: 'not_found',
+            message: 'org not found',
+          });
+          return;
+        }
+        sendJson(res, 200, { events: store.listMetering(org.id) });
+        return;
+      }
+
+      // Dev helper: confirm vault KEK parses (never echoes key)
+      if (match(method, url, 'GET', /^\/v0\/fixture\/vault-status$/)) {
+        let kek_ok = false;
+        if (config.vaultKekRaw) {
+          try {
+            parseKek(config.vaultKekRaw);
+            kek_ok = true;
+          } catch {
+            kek_ok = false;
+          }
+        }
+        sendJson(res, 200, {
+          kek_configured: Boolean(config.vaultKekRaw),
+          kek_ok,
+          store_path: config.storePath ?? null,
         });
         return;
       }
@@ -150,7 +328,7 @@ export function createServer(): http.Server {
       }
       sendJson(res, 500, {
         error: 'internal_error',
-        message: 'unexpected error',
+        message: err instanceof Error ? err.message : 'unexpected error',
       });
     }
   });

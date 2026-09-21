@@ -1,23 +1,14 @@
 import { randomUUID } from 'node:crypto';
+import { Org, Store } from '@grokbot/core';
 import { ApiConfig } from './config.js';
-import { ApiErrorBody, Org } from './types.js';
+import { ApiErrorBody } from './types.js';
 
-/** In-memory fixture store for M0 — no DB yet. */
-const fixtureOrgs = new Map<string, Org>();
-
-export function seedFixtureOrg(): Org {
-  const org: Org = {
-    id: '00000000-0000-4000-8000-000000000001',
-    name: 'fixture-dev-org',
-    status: 'fixture',
-    screening_status: 'fixture_exempt',
-  };
-  fixtureOrgs.set(org.id, org);
-  return org;
+export function seedFixtureOrg(store: Store): Org {
+  return store.seedFixtureOrg();
 }
 
-export function getOrg(id: string): Org | undefined {
-  return fixtureOrgs.get(id);
+export function getOrg(store: Store, id: string): Org | undefined {
+  return store.getOrg(id);
 }
 
 export interface CreateOrgResult {
@@ -30,6 +21,7 @@ export interface CreateOrgResult {
  * Fixture create only when config + header + body.fixture.
  */
 export function createOrg(
+  store: Store,
   config: ApiConfig,
   input: { name?: string; fixture?: boolean },
   allowFixtureHeader: boolean,
@@ -59,11 +51,10 @@ export function createOrg(
       status: 'fixture',
       screening_status: 'fixture_exempt',
     };
-    fixtureOrgs.set(org.id, org);
+    store.putOrg(org);
     return { status: 201, body: org };
   }
 
-  // Live path — always gated in M0
   return {
     status: 403,
     body: {

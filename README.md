@@ -6,58 +6,131 @@ Credential vault, multi-network NTRIP routing/failover, device provisioning, hea
 
 | Field | Value |
 | --- | --- |
-| **Milestone** | **M0** — design freeze & skeleton (this branch) |
+| **Milestone** | **M1** — vertical slice (generic NTRIP) |
 | **Date** | 21 Sep 2026 (Europe/Oslo) |
-| **Status** | Skeleton only — no live tenants, no real vault crypto, no upstream relay |
+| **Status** | Vault + fixture device provision + NTRIP proxy relay (mocked upstream OK in tests). Live orgs still gated. |
 
 ---
 
-## Stack choice
+## Stack
 
-**TypeScript (Node 20+) monorepo** — `packages/api`, `packages/proxy`, `packages/adapters`.
+**TypeScript (Node 20+) monorepo** — `packages/core`, `packages/api`, `packages/proxy`, `packages/adapters`.
 
-**Why:** Architecture §9 allows Go-everywhere *or* TypeScript for the control API (OpenAPI speed) with a preference for **one language until M2**. TypeScript gets a clean npm-workspaces monorepo, OpenAPI stub, and shared adapter types fastest for M0; the proxy remains a thin TCP listen/auth stub that can move to Go/Rust later if needed without blocking the control-plane skeleton.
-
-Datastore target remains **PostgreSQL** (`migrations/`). No production KEK in M0.
+- **Datastore:** PostgreSQL schema in `migrations/` (source of truth). M1 runtime uses an in-memory store with optional JSON file (`GROKBOT_STORE_PATH`) so api + proxy share state locally.
+- **Vault:** AES-256-GCM; KEK from `VAULT_KEK` / `VAULT_MASTER_KEY` (32-byte hex or base64).
+- **Pseudo-creds:** scrypt password hashes (Node built-in; architecture allows argon2id/scrypt/bcrypt).
 
 ---
 
 ## M0 vs M1
 
-| | M0 (this repo state) | M1 (next) |
+| | M0 | M1 (this branch) |
 | --- | --- | --- |
-| Docs | Architecture, decision record, threat/screening checklist, OpenAPI stub | Same + vertical-slice notes |
-| Control API | Health, org GET/POST stubs; **live POST → 403 `screening_required`** | Device pseudo-cred provision (fixture org) |
-| Proxy | Listen + Basic Auth stub; **no real upstream** | Relay via generic NTRIP Basic Auth to test caster |
-| Vault | Ciphertext columns in SQL only | Encrypt/decrypt path |
-| Adapters | Interface + stubs; **CPOS present but disabled / not registered** | **Real:** `ntrip_basic`. Still stub: Point One, GEODNET, Skylark, SmartNet, CPOS |
-| Metering / audit | Schema + OpenAPI shapes (no lat/lon) | Writers to PG |
+| Vault | Ciphertext columns only | **Real** AES-256-GCM encrypt/decrypt |
+| Devices | 501 stub | **Real** fixture-org provision (hash only) |
+| Proxy | Auth stub, no upstream | **Real** pseudo-auth → vault → generic NTRIP relay |
+| Adapters | stubs | **Real:** `ntrip_basic`. **Stub:** Point One, GEODNET, Skylark, SmartNet. **Disabled:** CPOS |
+| Audit / metering | schema only | **Writers** (session started/ended/auth_fail; connect/bytes/device-days; **no lat/lon**) |
+| Live `POST /v0/orgs` | 403 | **Still 403 `screening_required`** |
 
 ---
 
 ## Non-goals (standing)
 
-See `docs/architecture.md` §3 and `docs/decision-record.md`. In short:
-
-1. No Kartverket CPOS displacement  
-2. No GNSS spoof/jam products or tradecraft  
-3. No military guidance / anti-spoof packaging  
-4. No building CORS / base stations as v0  
-5. No fund custody / banking-licence path  
-6. **No live customer/org provisioning** until ToS + screening  
-7. **CPOS adapter post-counsel only** (stub disabled)  
-8. **No track histories** — GGA/last-position for session health only; metering = connect / bytes / device-days (no lat/lon)  
-9. No hardware / hosting-as-idea product framing  
+See `docs/architecture.md` §3. In short: no CPOS displacement; no spoof/jam; no mil packaging; no CORS/base stations; no fund custody; **no live orgs until screening**; **CPOS post-counsel**; **no track histories** — GGA/last-position for live session health only (overwrite/drop on end); metering = connect / bytes / device-days only.
 
 ---
 
-## Fixture-org only
+## M1 runbook
 
-- Seeded fixture org id: `00000000-0000-4000-8000-000000000001`  
-- Extra fixture create: `ALLOW_FIXTURE_ORGS=true` (non-prod) + header `X-Allow-Fixture-Orgs: true` + body `{ "name": "...", "fixture": true }`  
-- Any **live** `POST /v0/orgs` → **403** `{ "error": "screening_required", ... }`  
+### 1. Env
 
-Proxy fixture Basic Auth (local only, not for prod): user `fixture-device` / pass `fixture-pass-not-for-prod`.
+```bash
+cp .env.example .env
+# Generate a fresh KEK:
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# Put it in VAULT_KEK=...
+export $(grep -v '^#' .env | xargs)
+rm -f "$GROKBOT_STORE_PATH"
+```
+
+### 2. Build / test
+
+```bash
+npm install
+npm run build
+npm run lint
+npm test
+```
+
+### 3. Run API + proxy (separate terminals)
+
+```bash
+ALLOW_FIXTURE_ORGS=true VAULT_KEK=$VAULT_KEK GROKBOT_STORE_PATH=/tmp/grokbot-m1-store.json \
+  npm run dev:api     # :8080
+
+ALLOW_FIXTURE_ORGS=true VAULT_KEK=$VAULT_KEK GROKBOT_STORE_PATH=/tmp/grokbot-m1-store.json \
+  npm run dev:proxy   # :2101
+```
+
+### 4. Seed fixture upstream secret
+
+```bash
+curl -s -X POST localhost:8080/v0/fixture/upstream-secret \
+  -H 'content-type: application/json' \
+  -d '{
+    "host":"127.0.0.1",
+    "port":2101,
+    "mountpoint":"TEST",
+    "username":"upstream-user",
+    "password":"upstream-pass-not-for-prod"
+  }'
+# Returns metadata only (last4) — never plaintext password.
+```
+
+Point `host`/`port`/`mountpoint` at a real public/test caster when available, or keep a local mock caster. Happy-path tests mock the upstream TCP.
+
+### 5. Provision a fixture device
+
+```bash
+FIXTURE_ORG=00000000-0000-4000-8000-000000000001
+curl -s -X POST localhost:8080/v0/orgs/$FIXTURE_ORG/devices \
+  -H 'content-type: application/json' \
+  -d '{"label":"rover-1"}'
+# Save pseudo_username / pseudo_password — returned once.
+```
+
+### 6. Connect via NTRIP (pseudo-cred)
+
+```bash
+# Example with curl-style Basic Auth over raw TCP is awkward; use an NTRIP client:
+# host=localhost port=2101 user=$pseudo_username pass=$pseudo_password mount=TEST
+```
+
+### 7. Expected gates
+
+```bash
+curl -s -X POST localhost:8080/v0/orgs -H 'content-type: application/json' \
+  -d '{"name":"Live Corp"}'
+# → 403 {"error":"screening_required",...}
+```
+
+### 8. Inspect audit / metering / health
+
+```bash
+curl -s localhost:8080/v0/orgs/$FIXTURE_ORG/audit
+curl -s localhost:8080/v0/orgs/$FIXTURE_ORG/usage/events
+curl -s localhost:8080/v0/orgs/$FIXTURE_ORG/health
+```
+
+Metering payloads must never contain lat/lon/GGA/track fields.
+
+Apply PG migrations when you have Postgres:
+
+```bash
+psql "$DATABASE_URL" -f migrations/001_initial.sql
+psql "$DATABASE_URL" -f migrations/002_m1_sessions.sql
+```
 
 ---
 
@@ -65,56 +138,32 @@ Proxy fixture Basic Auth (local only, not for prod): user `fixture-device` / pas
 
 ```
 grokbot/
-  README.md
-  docs/
-    architecture.md
-    decision-record.md
-    deep-dive-summary.md
-    threat-screening-checklist.md
-    openapi/openapi.yaml
   packages/
-    api/        # control plane HTTP skeleton
-    proxy/      # NTRIP proxy skeleton (listen + auth stub)
-    adapters/   # ntrip_basic + vendor stubs; cpos disabled
-  migrations/   # initial PG schema stubs
+    core/       # vault, passwords, store, metering helpers
+    api/        # control plane
+    proxy/      # NTRIP proxy + relay
+    adapters/   # ntrip_basic (real) + vendor stubs; cpos disabled
+  migrations/
+  docs/openapi/openapi.yaml
 ```
 
 ---
 
-## Build / run / lint
+## Real vs still stub
 
-```bash
-npm install
-npm run build      # or: make build
-npm run lint       # or: make lint
-npm test           # or: make test
-npm run typecheck
-
-# Run (separate terminals)
-ALLOW_FIXTURE_ORGS=true npm run dev:api     # :8080
-npm run dev:proxy                           # :2101
-```
-
-Quick checks:
-
-```bash
-curl -s localhost:8080/healthz
-curl -s -X POST localhost:8080/v0/orgs -H 'content-type: application/json' \
-  -d '{"name":"Live Corp"}'   # expect 403 screening_required
-```
-
-Apply migrations (when you have Postgres): `psql "$DATABASE_URL" -f migrations/001_initial.sql`
+| Component | Status |
+| --- | --- |
+| Vault AES-256-GCM | **Real** |
+| Device pseudo-cred (fixture org) | **Real** (scrypt hash) |
+| Generic NTRIP Basic Auth adapter | **Real** (mockable TCP for tests) |
+| Proxy auth + relay | **Real** |
+| Session audit + health samples | **Real** (ephemeral last position dropped on end) |
+| Metering writers | **Real** (no location fields) |
+| Point One / GEODNET / Skylark / SmartNet | **Stub** (`not_implemented`) |
+| CPOS | **Disabled** / not in routing registry |
+| Live org POST | **403 screening_required** |
+| Failover policy engine | Deferred to M2 |
 
 ---
 
-## Docs
-
-- [`docs/architecture.md`](docs/architecture.md) — v0 architecture (copied from Builder workspace)  
-- [`docs/decision-record.md`](docs/decision-record.md) — locked product wedge  
-- [`docs/deep-dive-summary.md`](docs/deep-dive-summary.md) — summary of Scout deep-dive (full brief not vendored)  
-- [`docs/threat-screening-checklist.md`](docs/threat-screening-checklist.md) — M0 draft for Ops/counsel  
-- [`docs/openapi/openapi.yaml`](docs/openapi/openapi.yaml) — control API stub  
-
----
-
-*M0 skeleton. Implement M1 vertical slice next; keep screening + CPOS gates closed.*
+*M1 vertical slice. Stack on / merge after M0 PR #1 (`m0-skeleton` → `main`). Keep screening + CPOS gates closed.*

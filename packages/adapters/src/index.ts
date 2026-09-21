@@ -1,5 +1,6 @@
 export * from './types.js';
-export { ntripBasicAdapter } from './ntrip_basic.js';
+export { ntripBasicAdapter, setNtripTcpConnect } from './ntrip_basic.js';
+export type { TcpConnectFn } from './ntrip_basic.js';
 export { pointOneAdapter } from './point_one.js';
 export { geodnetAdapter } from './geodnet.js';
 export { skylarkAdapter } from './skylark.js';

@@ -1,16 +1,14 @@
 /**
  * NTRIP Basic Auth against pseudo-credentials — never against upstream master.
- * M0: stub validator (always rejects unknown; accepts documented fixture user).
  */
+
+import { Store, verifyPassword } from '@grokbot/core';
 
 export interface PseudoIdentity {
   deviceId: string;
   orgId: string;
   username: string;
 }
-
-const FIXTURE_USER = 'fixture-device';
-const FIXTURE_PASS = 'fixture-pass-not-for-prod';
 
 export function parseBasicAuth(
   header: string | undefined,
@@ -26,16 +24,22 @@ export function parseBasicAuth(
   }
 }
 
-export function authenticatePseudo(
+export async function authenticatePseudo(
+  store: Store,
   user: string,
   pass: string,
-): PseudoIdentity | null {
-  if (user === FIXTURE_USER && pass === FIXTURE_PASS) {
-    return {
-      deviceId: '00000000-0000-4000-8000-0000000000d1',
-      orgId: '00000000-0000-4000-8000-000000000001',
-      username: user,
-    };
-  }
-  return null;
+): Promise<PseudoIdentity | null> {
+  await store.reload();
+  const cred = store.getCredentialByUsername(user);
+  if (!cred || cred.revoked_at) return null;
+  if (cred.expires_at && Date.parse(cred.expires_at) < Date.now()) return null;
+  const device = store.getDevice(cred.device_id);
+  if (!device || device.status !== 'active') return null;
+  const ok = await verifyPassword(pass, cred.password_hash);
+  if (!ok) return null;
+  return {
+    deviceId: device.id,
+    orgId: device.org_id,
+    username: cred.username,
+  };
 }

@@ -1,31 +1,40 @@
 import net from 'node:net';
-import { getRoutableAdapter, listRoutableAdapters } from '@grokbot/adapters';
+import { getRoutableAdapter } from '@grokbot/adapters';
+import { getDefaultStore, setDefaultStore, Store } from '@grokbot/core';
 import { authenticatePseudo, parseBasicAuth } from './auth.js';
-import { ProxySession } from './session.js';
+import { loadProxyConfig, ProxyRuntimeConfig } from './config.js';
+import { handleAuthenticatedSession } from './relay.js';
 
-export interface ProxyConfig {
-  port: number;
+export interface ProxyServerOptions {
+  config?: ProxyRuntimeConfig;
+  store?: Store;
 }
 
 /**
- * Minimal NTRIP-ish listen loop for M0.
- * Accepts TCP, parses a simple GET + Authorization for skeleton compile/run.
- * Does NOT open real upstream connections in M0.
+ * NTRIP listen loop — authenticates pseudo-creds, relays via generic NTRIP Basic Auth.
  */
-export function createProxyServer(_config: ProxyConfig): net.Server {
-  // Ensure CPOS is not routable
+export function createProxyServer(opts: ProxyServerOptions = {}): net.Server {
   if (getRoutableAdapter('cpos_customer')) {
     throw new Error('CPOS must not be registered for routing');
   }
 
+  const config = opts.config ?? loadProxyConfig();
+  const store = opts.store ?? getDefaultStore();
+  if (opts.store) setDefaultStore(opts.store);
+
   return net.createServer((socket) => {
-    let buf = '';
+    let buf = Buffer.alloc(0);
     const onData = (chunk: Buffer) => {
-      buf += chunk.toString('utf8');
-      if (!buf.includes('\r\n\r\n')) return;
+      buf = Buffer.concat([buf, chunk]);
+      const text = buf.toString('utf8');
+      if (!text.includes('\r\n\r\n')) return;
       socket.off('data', onData);
 
-      const lines = buf.split('\r\n');
+      const headerEnd = buf.indexOf('\r\n\r\n');
+      const headerBuf = buf.subarray(0, headerEnd);
+      const leftover = buf.subarray(headerEnd + 4);
+      const headerText = headerBuf.toString('utf8');
+      const lines = headerText.split('\r\n');
       const requestLine = lines[0] ?? '';
       const headers: Record<string, string> = {};
       for (const line of lines.slice(1)) {
@@ -38,46 +47,52 @@ export function createProxyServer(_config: ProxyConfig): net.Server {
         }
       }
 
-      const auth = parseBasicAuth(headers['authorization']);
-      if (!auth) {
-        socket.write(
-          'HTTP/1.0 401 Unauthorized\r\nWWW-Authenticate: Basic realm="grokbot"\r\n\r\n',
+      void (async () => {
+        const auth = parseBasicAuth(headers['authorization']);
+        if (!auth) {
+          store.appendAudit({
+            actor_type: 'device',
+            event_type: 'session.auth_fail',
+            payload_json: { reason: 'missing_auth' },
+          });
+          await store.persist();
+          socket.write(
+            'HTTP/1.0 401 Unauthorized\r\nWWW-Authenticate: Basic realm="grokbot"\r\n\r\n',
+          );
+          socket.end();
+          return;
+        }
+
+        const identity = await authenticatePseudo(
+          store,
+          auth.user,
+          auth.pass,
         );
-        socket.end();
-        return;
-      }
+        if (!identity) {
+          store.appendAudit({
+            actor_type: 'device',
+            event_type: 'session.auth_fail',
+            payload_json: { reason: 'bad_credentials', username: auth.user },
+          });
+          await store.persist();
+          socket.write('HTTP/1.0 401 Unauthorized\r\n\r\n');
+          socket.end();
+          return;
+        }
 
-      const identity = authenticatePseudo(auth.user, auth.pass);
-      if (!identity) {
-        socket.write('HTTP/1.0 401 Unauthorized\r\n\r\n');
-        socket.end();
-        return;
-      }
-
-      const session: ProxySession = {
-        deviceId: identity.deviceId,
-        orgId: identity.orgId,
-        pseudoUser: identity.username,
-        state: 'connecting',
-        bytesIn: 0,
-        bytesOut: 0,
-        startedAt: new Date(),
-      };
-
-      // M0: no real upstream; acknowledge and close with informative body.
-      const adapters = listRoutableAdapters()
-        .map((a) => a.type)
-        .join(',');
-      const body =
-        `SOURCETABLE 200 OK\r\n` +
-        `Server: grokbot-proxy-m0\r\n` +
-        `Connection: close\r\n\r\n` +
-        `M0 skeleton — no upstream relay yet. device=${session.deviceId} ` +
-        `request=${requestLine} routable=${adapters}\r\n` +
-        `ENDSOURCETABLE\r\n`;
-      session.state = 'closed';
-      socket.write(body);
-      socket.end();
+        await handleAuthenticatedSession({
+          socket,
+          store,
+          config,
+          identity,
+          requestLine,
+          leftover,
+        });
+      })().catch(() => {
+        if (!socket.destroyed) {
+          socket.destroy();
+        }
+      });
     };
 
     socket.on('data', onData);
@@ -87,8 +102,15 @@ export function createProxyServer(_config: ProxyConfig): net.Server {
   });
 }
 
-export function listenProxy(config: ProxyConfig): net.Server {
-  const server = createProxyServer(config);
-  server.listen(config.port);
+export function listenProxy(
+  config: ProxyRuntimeConfig | { port: number },
+  store?: Store,
+): net.Server {
+  const full =
+    'ntripUpstreamPort' in config
+      ? (config as ProxyRuntimeConfig)
+      : { ...loadProxyConfig(), port: config.port };
+  const server = createProxyServer({ config: full, store });
+  server.listen(full.port);
   return server;
 }

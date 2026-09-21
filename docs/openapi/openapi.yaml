@@ -1,18 +1,20 @@
 openapi: 3.0.3
 info:
   title: grokbot Control API
-  version: 0.0.0-m0
+  version: 0.1.0-m1
   description: |
-    M0 OpenAPI stub for GNSS RTK OEM/fleet correction orchestration.
+    M1 control API for GNSS RTK OEM/fleet correction orchestration.
     Live org provisioning is gated: POST /v0/orgs without screening → 403 screening_required.
     Fixture orgs only in non-prod when ALLOW_FIXTURE_ORGS=true.
+    Vault encrypts upstream secrets (AES-256-GCM). Device provision returns pseudo-password once.
     No fund custody, no location analytics in metering, no CPOS routing.
 servers:
   - url: http://localhost:8080
-    description: Local M0 skeleton
+    description: Local M1
 tags:
   - name: orgs
   - name: devices
+  - name: vault
   - name: health
   - name: audit
   - name: usage
@@ -22,12 +24,12 @@ paths:
       tags: [health]
       summary: Process liveness
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Healthz'
+                $ref: "#/components/schemas/Healthz"
   /v0/orgs:
     post:
       tags: [orgs]
@@ -42,26 +44,26 @@ paths:
           required: false
           schema:
             type: string
-            enum: ['true']
+            enum: ["true"]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrgCreate'
+              $ref: "#/components/schemas/OrgCreate"
       responses:
-        '201':
+        "201":
           description: Fixture org created (non-prod only)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Org'
-        '403':
+                $ref: "#/components/schemas/Org"
+        "403":
           description: Live org create blocked pending screening
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
               examples:
                 screening_required:
                   value:
@@ -70,30 +72,30 @@ paths:
   /v0/orgs/{org_id}:
     get:
       tags: [orgs]
-      summary: Get org (stub)
+      summary: Get org
       parameters:
-        - $ref: '#/components/parameters/OrgId'
+        - $ref: "#/components/parameters/OrgId"
       responses:
-        '200':
+        "200":
           description: Org
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Org'
-        '404':
+                $ref: "#/components/schemas/Org"
+        "404":
           description: Not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
   /v0/orgs/{org_id}/devices:
     get:
       tags: [devices]
-      summary: List devices (stub)
+      summary: List devices
       parameters:
-        - $ref: '#/components/parameters/OrgId'
+        - $ref: "#/components/parameters/OrgId"
       responses:
-        '200':
+        "200":
           description: Device list
           content:
             application/json:
@@ -103,83 +105,119 @@ paths:
                   devices:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Device'
+                      $ref: "#/components/schemas/Device"
     post:
       tags: [devices]
-      summary: Provision device (stub — fixture org only in M0)
+      summary: Provision device (fixture org only)
+      description: |
+        Creates device + pseudo-credential. Password returned once; only scrypt hash stored.
+        Allowed only for fixture orgs when ALLOW_FIXTURE_ORGS=true.
       parameters:
-        - $ref: '#/components/parameters/OrgId'
+        - $ref: "#/components/parameters/OrgId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DeviceCreate'
+              $ref: "#/components/schemas/DeviceCreate"
       responses:
-        '501':
-          description: Not implemented until M1 vertical slice
+        "201":
+          description: Device provisioned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/DeviceProvisioned"
+        "403":
+          description: Not a fixture org / fixtures disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /v0/devices/{device_id}:
     get:
       tags: [devices]
-      summary: Get device (stub)
+      summary: Get device
       parameters:
-        - $ref: '#/components/parameters/DeviceId'
+        - $ref: "#/components/parameters/DeviceId"
       responses:
-        '501':
-          description: Not implemented until M1
+        "200":
+          description: Device
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Device"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v0/fixture/upstream-secret:
+    post:
+      tags: [vault]
+      summary: Seed fixture upstream + vault secret (dev)
+      description: |
+        Encrypts ntrip_basic username/password with VAULT_KEK (AES-256-GCM).
+        Returns metadata only (last4). Never returns plaintext password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpstreamSecretCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpstreamSecretMeta"
+  /v0/orgs/{org_id}/upstreams:
+    get:
+      tags: [vault]
+      summary: List upstreams + vault metadata (no plaintext)
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+      responses:
+        "200":
+          description: Upstream list
   /v0/orgs/{org_id}/health:
     get:
       tags: [health]
-      summary: Org health rollup (stub)
+      summary: Org health rollup
       description: |
-        Health/SLA only. GGA/last-position may appear as last_gga_age_ms for live sessions —
-        not retained as track histories.
+        Health/SLA only. last_gga_age_ms for live sessions —
+        last position is ephemeral and dropped on session end (not track history).
       parameters:
-        - $ref: '#/components/parameters/OrgId'
+        - $ref: "#/components/parameters/OrgId"
       responses:
-        '200':
-          description: Health stub
+        "200":
+          description: Health
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrgHealth'
+                $ref: "#/components/schemas/OrgHealth"
   /v0/orgs/{org_id}/audit:
     get:
       tags: [audit]
-      summary: Audit query hook (stub)
+      summary: Audit events (M1 list)
       parameters:
-        - $ref: '#/components/parameters/OrgId'
+        - $ref: "#/components/parameters/OrgId"
       responses:
-        '501':
-          description: Not implemented until M2
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+        "200":
+          description: Audit events
   /v0/orgs/{org_id}/usage/events:
     get:
       tags: [usage]
-      summary: Metering events (stub)
+      summary: Metering events
       description: |
         Metering fields are connect/bytes/device-days only.
         Schemas MUST NOT include lat, lon, GGA, or track points.
       parameters:
-        - $ref: '#/components/parameters/OrgId'
+        - $ref: "#/components/parameters/OrgId"
       responses:
-        '501':
-          description: Not implemented until M1 writers
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+        "200":
+          description: Metering events
 components:
   parameters:
     OrgId:
@@ -207,7 +245,7 @@ components:
           type: string
         milestone:
           type: string
-          example: M0
+          example: M1
     OrgCreate:
       type: object
       required: [name]
@@ -254,6 +292,38 @@ components:
         status:
           type: string
           enum: [active, revoked]
+    DeviceProvisioned:
+      type: object
+      required: [device, pseudo_username, pseudo_password]
+      properties:
+        device:
+          $ref: "#/components/schemas/Device"
+        pseudo_username:
+          type: string
+        pseudo_password:
+          type: string
+          description: Returned once — never stored in plaintext
+    UpstreamSecretCreate:
+      type: object
+      required: [host, username, password]
+      properties:
+        display_name: { type: string }
+        host: { type: string }
+        port: { type: integer, default: 2101 }
+        use_tls: { type: boolean }
+        mountpoint: { type: string }
+        username: { type: string }
+        password: { type: string }
+    UpstreamSecretMeta:
+      type: object
+      properties:
+        upstream_id: { type: string, format: uuid }
+        secret_id: { type: string, format: uuid }
+        last4: { type: string }
+        adapter_type: { type: string }
+        host: { type: string }
+        port: { type: integer }
+        mountpoint: { type: string }
     OrgHealth:
       type: object
       properties:
@@ -262,7 +332,15 @@ components:
           format: uuid
         active_sessions:
           type: integer
-        # last_gga_age_ms is health-only; do not retain tracks
+        sessions:
+          type: array
+          items:
+            type: object
+            properties:
+              session_id: { type: string, format: uuid }
+              device_id: { type: string, format: uuid }
+              last_gga_age_ms: { type: integer, nullable: true }
+              has_last_position: { type: boolean }
         notes:
           type: string
           example: GGA/last-position for session health only — no track histories
@@ -274,7 +352,6 @@ components:
           type: string
         message:
           type: string
-    # Metering event shapes (documentation only for M0 — no lat/lon)
     MeteringSessionStarted:
       type: object
       description: usage.session_started — no location fields

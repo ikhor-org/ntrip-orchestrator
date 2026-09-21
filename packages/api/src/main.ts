@@ -1,11 +1,23 @@
+import { getDefaultStore } from '@grokbot/core';
 import { loadConfig } from './config.js';
 import { createServer } from './server.js';
 
-const config = loadConfig();
-const server = createServer();
-server.listen(config.port, () => {
+async function main(): Promise<void> {
+  const config = loadConfig();
+  const store = getDefaultStore();
+  await store.load();
+  store.seedFixtureOrg();
+  const server = createServer({ store, config });
+  server.listen(config.port, () => {
+    // eslint-disable-next-line no-console
+    console.log(
+      `grokbot-api M1 listening on :${config.port} (fixture_orgs=${config.allowFixtureOrgs})`,
+    );
+  });
+}
+
+main().catch((err) => {
   // eslint-disable-next-line no-console
-  console.log(
-    `grokbot-api M0 listening on :${config.port} (fixture_orgs=${config.allowFixtureOrgs})`,
-  );
+  console.error(err);
+  process.exit(1);
 });
