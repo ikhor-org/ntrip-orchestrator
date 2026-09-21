@@ -118,6 +118,7 @@ export interface LiveSessionHealth {
   session_id: string;
   device_id: string;
   org_id: string;
+  profile_id?: string;
   upstream_id?: string;
   started_at: string;
   /** Health-only; overwritten; dropped on session end. */
@@ -126,4 +127,81 @@ export interface LiveSessionHealth {
   last_position?: { lat: number; lon: number };
   bytes_up: number;
   bytes_down: number;
+  failover_count: number;
+  /** Current upstream stream status for health API. */
+  upstream_ok?: boolean;
 }
+
+/** Architecture §5.4 ProfilePolicy */
+export interface ProfileCandidate {
+  priority: number;
+  upstream_endpoint_id: string;
+  mountpoint_override?: string;
+  min_health?: 'ok';
+}
+
+export interface FailoverPolicy {
+  unhealthy_after_ms: number;
+  max_switches_per_hour: number;
+  on_exhaust: 'reject' | 'keep_last_best_effort';
+}
+
+export interface ProfilePolicy {
+  profile_id?: string;
+  candidates: ProfileCandidate[];
+  failover: FailoverPolicy;
+  datum_tag?: string;
+  epoch_tag?: string;
+}
+
+export interface Profile {
+  id: string;
+  org_id: string;
+  name: string;
+  policy_json: ProfilePolicy;
+  datum_tag?: string;
+  epoch_tag?: string;
+  created_at: string;
+}
+
+export type UpstreamHealthStatus = 'ok' | 'degraded' | 'unreachable' | 'unknown';
+
+export interface UpstreamHealthSnapshot {
+  upstream_id: string;
+  org_id: string;
+  status: UpstreamHealthStatus;
+  reachable: boolean;
+  last_ok_at?: string;
+  last_fail_at?: string;
+  last_error?: string;
+  /** Rolling connect success rate 0..1 if known. */
+  recent_success_rate?: number;
+  updated_at: string;
+}
+
+export interface UsageWebhook {
+  id: string;
+  org_id: string;
+  url: string;
+  /** HMAC secret for signed delivery — never expose in list responses. */
+  secret: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+export const DEFAULT_FAILOVER: FailoverPolicy = {
+  unhealthy_after_ms: 30_000,
+  max_switches_per_hour: 10,
+  on_exhaust: 'reject',
+};
+
+export type FailoverReasonCode =
+  | 'primary_ok'
+  | 'primary_unreachable'
+  | 'primary_unhealthy'
+  | 'switched_secondary'
+  | 'switched_next'
+  | 'hysteresis_hold'
+  | 'max_switches_exhausted'
+  | 'candidates_exhausted'
+  | 'keep_last_best_effort';

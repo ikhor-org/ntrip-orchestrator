@@ -6,9 +6,10 @@ Credential vault, multi-network NTRIP routing/failover, device provisioning, hea
 
 | Field | Value |
 | --- | --- |
-| **Milestone** | **M1** — vertical slice (generic NTRIP) |
+| **Milestone** | **M2** — failover + ops visibility |
 | **Date** | 21 Sep 2026 (Europe/Oslo) |
-| **Status** | Vault + fixture device provision + NTRIP proxy relay (mocked upstream OK in tests). Live orgs still gated. |
+| **Status** | Profile policy, health-triggered failover with hysteresis, health/audit/usage APIs, provisional load test (50 concurrent mocked sessions). Live orgs still gated. |
+| **Load test target** | **50 concurrent mocked sessions** — **provisional** (architecture O8 OPEN) |
 
 ---
 
@@ -16,154 +17,132 @@ Credential vault, multi-network NTRIP routing/failover, device provisioning, hea
 
 **TypeScript (Node 20+) monorepo** — `packages/core`, `packages/api`, `packages/proxy`, `packages/adapters`.
 
-- **Datastore:** PostgreSQL schema in `migrations/` (source of truth). M1 runtime uses an in-memory store with optional JSON file (`GROKBOT_STORE_PATH`) so api + proxy share state locally.
+- **Datastore:** PostgreSQL schema in `migrations/` (source of truth). Runtime uses in-memory store + optional JSON file (`GROKBOT_STORE_PATH`) so api + proxy share state locally.
 - **Vault:** AES-256-GCM; KEK from `VAULT_KEK` / `VAULT_MASTER_KEY` (32-byte hex or base64).
-- **Pseudo-creds:** scrypt password hashes (Node built-in; architecture allows argon2id/scrypt/bcrypt).
+- **Pseudo-creds:** scrypt password hashes.
+- **Policy:** ordered primary/secondary candidates; `unhealthy_after_ms` + `max_switches_per_hour` hysteresis.
 
 ---
 
-## M0 vs M1
+## M0 → M1 → M2
 
-| | M0 | M1 (this branch) |
-| --- | --- | --- |
-| Vault | Ciphertext columns only | **Real** AES-256-GCM encrypt/decrypt |
-| Devices | 501 stub | **Real** fixture-org provision (hash only) |
-| Proxy | Auth stub, no upstream | **Real** pseudo-auth → vault → generic NTRIP relay |
-| Adapters | stubs | **Real:** `ntrip_basic`. **Stub:** Point One, GEODNET, Skylark, SmartNet. **Disabled:** CPOS |
-| Audit / metering | schema only | **Writers** (session started/ended/auth_fail; connect/bytes/device-days; **no lat/lon**) |
-| Live `POST /v0/orgs` | 403 | **Still 403 `screening_required`** |
+| | M0 | M1 | M2 (this branch) |
+| --- | --- | --- | --- |
+| Vault | Ciphertext columns | **Real** AES-256-GCM | same |
+| Devices | 501 | **Real** fixture provision | same + profile_id |
+| Proxy | Auth stub | **Real** NTRIP relay | **Failover** via profile policy |
+| Policy | — | implicit single upstream | **Primary/secondary + hysteresis** |
+| Health API | basic org | basic | **upstreams + devices + sessions** |
+| Audit | writers | list | **Filtered query** (org/device/time/event_type) |
+| Usage | writers | list | **Export + signed webhook** |
+| Load test | — | — | **50 concurrent** (provisional) |
+| Docs | checklist | M1 runbook | **ToS draft + screening runbook started** |
+| Live `POST /v0/orgs` | 403 | 403 | **Still 403 `screening_required`** |
+
+**Merge order:** PR #1 `m0-skeleton` → `main`, then PR #2 `m1-generic-ntrip` → `m0-skeleton`, then this PR → `m1-generic-ntrip`.
 
 ---
 
 ## Non-goals (standing)
 
-See `docs/architecture.md` §3. In short: no CPOS displacement; no spoof/jam; no mil packaging; no CORS/base stations; no fund custody; **no live orgs until screening**; **CPOS post-counsel**; **no track histories** — GGA/last-position for live session health only (overwrite/drop on end); metering = connect / bytes / device-days only.
+See `docs/architecture.md` §3. In short: no CPOS displacement; no spoof/jam; no mil packaging; no CORS/base stations; no fund custody; **no live orgs until screening**; **CPOS post-counsel**; **no track histories** — GGA/last-position for live session health only; metering = connect / bytes / device-days only.
+
+ToS draft + screening runbook: `docs/tos-draft.md`, `docs/runbooks/screening-workflow.md` — **do not unlock live orgs**.
 
 ---
 
-## M1 runbook
-
-### 1. Env
-
-```bash
-cp .env.example .env
-# Generate a fresh KEK:
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-# Put it in VAULT_KEK=...
-export $(grep -v '^#' .env | xargs)
-rm -f "$GROKBOT_STORE_PATH"
-```
-
-### 2. Build / test
+## Build / test
 
 ```bash
 npm install
 npm run build
 npm run lint
 npm test
+# optional: load test only
+npm run loadtest
 ```
 
-### 3. Run API + proxy (separate terminals)
+---
+
+## M2 runbook — demo failover
+
+Concrete steps: **`docs/runbooks/m2-failover-demo.md`**.
+
+Short version:
+
+1. Start API + proxy with shared `GROKBOT_STORE_PATH` and `VAULT_KEK`.
+2. Seed **two** fixture upstream secrets (primary + secondary).
+3. `POST /v0/orgs/{fixture}/profiles` with candidates priority 1 then 2; set `failover.unhealthy_after_ms` (0 for snappy demo; 30000 default).
+4. Provision device with that `profile_id`.
+5. `POST /v0/fixture/upstream-health` mark primary `unreachable` **or** kill primary mock caster.
+6. Connect NTRIP with pseudo-cred → secondary serves RTCM; check `GET .../audit?event_type=session.failover`.
+
+Automated: `packages/proxy` failover tests mock primary connect failure → secondary RTCM + audit.
+
+---
+
+## Key M2 endpoints
+
+```http
+POST   /v0/orgs/{org_id}/profiles
+GET    /v0/orgs/{org_id}/profiles
+GET    /v0/profiles/{profile_id}
+PUT    /v0/profiles/{profile_id}
+
+GET    /v0/orgs/{org_id}/health
+GET    /v0/upstreams/{upstream_id}/health
+GET    /v0/devices/{device_id}/health
+GET    /v0/orgs/{org_id}/sessions?status=active
+
+GET    /v0/orgs/{org_id}/audit?from=&to=&event_type=&device_id=&cursor=
+GET    /v0/orgs/{org_id}/usage/events?from=&to=&cursor=
+GET    /v0/orgs/{org_id}/usage/export?from=&to=&webhook_id=
+POST   /v0/orgs/{org_id}/usage/webhooks
+```
+
+OpenAPI: `docs/openapi/openapi.yaml`.
+
+---
+
+## Local env
 
 ```bash
-ALLOW_FIXTURE_ORGS=true VAULT_KEK=$VAULT_KEK GROKBOT_STORE_PATH=/tmp/grokbot-m1-store.json \
-  npm run dev:api     # :8080
+cp .env.example .env
+# Generate KEK:
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+export $(grep -v '^#' .env | xargs)
+rm -f "$GROKBOT_STORE_PATH"
 
-ALLOW_FIXTURE_ORGS=true VAULT_KEK=$VAULT_KEK GROKBOT_STORE_PATH=/tmp/grokbot-m1-store.json \
-  npm run dev:proxy   # :2101
+ALLOW_FIXTURE_ORGS=true VAULT_KEK=$VAULT_KEK GROKBOT_STORE_PATH=/tmp/grokbot-m2-store.json npm run dev:api
+ALLOW_FIXTURE_ORGS=true VAULT_KEK=$VAULT_KEK GROKBOT_STORE_PATH=/tmp/grokbot-m2-store.json npm run dev:proxy
 ```
 
-### 4. Seed fixture upstream secret
-
-```bash
-curl -s -X POST localhost:8080/v0/fixture/upstream-secret \
-  -H 'content-type: application/json' \
-  -d '{
-    "host":"127.0.0.1",
-    "port":2101,
-    "mountpoint":"TEST",
-    "username":"upstream-user",
-    "password":"upstream-pass-not-for-prod"
-  }'
-# Returns metadata only (last4) — never plaintext password.
-```
-
-Point `host`/`port`/`mountpoint` at a real public/test caster when available, or keep a local mock caster. Happy-path tests mock the upstream TCP.
-
-### 5. Provision a fixture device
-
-```bash
-FIXTURE_ORG=00000000-0000-4000-8000-000000000001
-curl -s -X POST localhost:8080/v0/orgs/$FIXTURE_ORG/devices \
-  -H 'content-type: application/json' \
-  -d '{"label":"rover-1"}'
-# Save pseudo_username / pseudo_password — returned once.
-```
-
-### 6. Connect via NTRIP (pseudo-cred)
-
-```bash
-# Example with curl-style Basic Auth over raw TCP is awkward; use an NTRIP client:
-# host=localhost port=2101 user=$pseudo_username pass=$pseudo_password mount=TEST
-```
-
-### 7. Expected gates
-
-```bash
-curl -s -X POST localhost:8080/v0/orgs -H 'content-type: application/json' \
-  -d '{"name":"Live Corp"}'
-# → 403 {"error":"screening_required",...}
-```
-
-### 8. Inspect audit / metering / health
-
-```bash
-curl -s localhost:8080/v0/orgs/$FIXTURE_ORG/audit
-curl -s localhost:8080/v0/orgs/$FIXTURE_ORG/usage/events
-curl -s localhost:8080/v0/orgs/$FIXTURE_ORG/health
-```
-
-Metering payloads must never contain lat/lon/GGA/track fields.
-
-Apply PG migrations when you have Postgres:
+PG migrations:
 
 ```bash
 psql "$DATABASE_URL" -f migrations/001_initial.sql
 psql "$DATABASE_URL" -f migrations/002_m1_sessions.sql
+psql "$DATABASE_URL" -f migrations/003_m2_profiles_usage.sql
 ```
 
 ---
 
-## Layout
-
-```
-grokbot/
-  packages/
-    core/       # vault, passwords, store, metering helpers
-    api/        # control plane
-    proxy/      # NTRIP proxy + relay
-    adapters/   # ntrip_basic (real) + vendor stubs; cpos disabled
-  migrations/
-  docs/openapi/openapi.yaml
-```
-
----
-
-## Real vs still stub
+## Real vs still stub / gated
 
 | Component | Status |
 | --- | --- |
 | Vault AES-256-GCM | **Real** |
-| Device pseudo-cred (fixture org) | **Real** (scrypt hash) |
-| Generic NTRIP Basic Auth adapter | **Real** (mockable TCP for tests) |
-| Proxy auth + relay | **Real** |
-| Session audit + health samples | **Real** (ephemeral last position dropped on end) |
-| Metering writers | **Real** (no location fields) |
-| Point One / GEODNET / Skylark / SmartNet | **Stub** (`not_implemented`) |
-| CPOS | **Disabled** / not in routing registry |
+| Device pseudo-cred (fixture) | **Real** |
+| Generic NTRIP adapter | **Real** |
+| Profile policy primary/secondary | **Real** |
+| Failover + hysteresis | **Real** |
+| Health / audit query / usage export | **Real** |
+| Load test 50 concurrent (provisional) | **Real** (automated) |
+| ToS draft + screening runbook | **Started** (docs only) |
+| Point One / GEODNET / Skylark / SmartNet | **Stub** |
+| CPOS | **Disabled** |
 | Live org POST | **403 screening_required** |
-| Failover policy engine | Deferred to M2 |
 
 ---
 
-*M1 vertical slice. Stack on / merge after M0 PR #1 (`m0-skeleton` → `main`). Keep screening + CPOS gates closed.*
+*M2 failover + ops visibility. Stack on M1 (`m1-generic-ntrip`). Keep screening + CPOS gates closed.*

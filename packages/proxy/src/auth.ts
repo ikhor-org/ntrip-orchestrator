@@ -8,6 +8,7 @@ export interface PseudoIdentity {
   deviceId: string;
   orgId: string;
   username: string;
+  profileId?: string;
 }
 
 export function parseBasicAuth(
@@ -37,9 +38,11 @@ export async function authenticatePseudo(
   if (!device || device.status !== 'active') return null;
   const ok = await verifyPassword(pass, cred.password_hash);
   if (!ok) return null;
-  return {
+  const identity: PseudoIdentity = {
     deviceId: device.id,
     orgId: device.org_id,
     username: cred.username,
   };
+  if (device.profile_id !== undefined) identity.profileId = device.profile_id;
+  return identity;
 }

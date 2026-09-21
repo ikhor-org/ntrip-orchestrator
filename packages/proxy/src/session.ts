@@ -21,6 +21,7 @@ export interface ProxySession {
   bytesIn: number;
   bytesOut: number;
   startedAt: Date;
+  failoverCount: number;
   /** Health-only; overwrite/drop on session end — no track history. */
   lastGgaAt?: Date;
   /** Ephemeral; drop on session end. */

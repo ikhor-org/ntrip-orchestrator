@@ -9,7 +9,25 @@ import {
 } from '@grokbot/core';
 import { ApiConfig, loadConfig } from './config.js';
 import { provisionDevice } from './devices.js';
+import {
+  deviceHealth,
+  listActiveSessions,
+  orgHealth,
+  upstreamHealth,
+} from './health.js';
 import { createOrg, getOrg, seedFixtureOrg } from './orgs.js';
+import {
+  createProfile,
+  getProfile,
+  listProfiles,
+  putProfile,
+} from './profiles.js';
+import {
+  exportUsage,
+  queryAudit,
+  queryUsageEvents,
+  registerUsageWebhook,
+} from './usage.js';
 import { seedFixtureUpstreamSecret } from './vault_admin.js';
 
 function sendJson(
@@ -74,9 +92,11 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
         sendJson(res, 200, {
           ok: true,
           service: 'grokbot-api',
-          milestone: 'M1',
+          milestone: 'M2',
           routable_adapters: listRoutableAdapters().map((a) => a.type),
           fixture_org_id: FIXTURE_ORG_ID,
+          load_test_target_concurrent_sessions: 50,
+          load_test_target_label: 'provisional (architecture O8 OPEN)',
         });
         return;
       }
@@ -166,6 +186,59 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
         return;
       }
 
+      // Profiles
+      const profilesList = match(
+        method,
+        url,
+        'GET',
+        /^\/v0\/orgs\/([^/]+)\/profiles$/,
+      );
+      if (profilesList) {
+        const result = listProfiles(store, profilesList[1]!);
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+      const profilesPost = match(
+        method,
+        url,
+        'POST',
+        /^\/v0\/orgs\/([^/]+)\/profiles$/,
+      );
+      if (profilesPost) {
+        const raw = (await readJson(req)) as Record<string, unknown>;
+        const result = createProfile(store, profilesPost[1]!, raw as never);
+        if (result.status === 201) await store.persist();
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+      const profileGet = match(
+        method,
+        url,
+        'GET',
+        /^\/v0\/profiles\/([^/]+)$/,
+      );
+      if (profileGet) {
+        const result = getProfile(store, profileGet[1]!);
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+      const profilePut = match(
+        method,
+        url,
+        'PUT',
+        /^\/v0\/profiles\/([^/]+)$/,
+      );
+      if (profilePut) {
+        const raw = (await readJson(req)) as Record<string, unknown>;
+        const result = putProfile(store, profilePut[1]!, raw as never);
+        if (result.status === 200) await store.persist();
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
       // Seed fixture upstream + vault secret (admin/dev)
       if (match(method, url, 'POST', /^\/v0\/fixture\/upstream-secret$/)) {
         const raw = (await readJson(req)) as {
@@ -186,8 +259,50 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
           username: raw.username ?? '',
           password: raw.password ?? '',
         });
-        if (result.status === 201) await store.persist();
+        if (result.status === 201) {
+          const body = result.body as { upstream_id?: string };
+          if (body.upstream_id) {
+            store.setUpstreamHealth(body.upstream_id, FIXTURE_ORG_ID, {
+              status: 'ok',
+              reachable: true,
+            });
+          }
+          await store.persist();
+        }
         sendJson(res, result.status, result.body);
+        return;
+      }
+
+      // Dev helper: mark upstream health (for failover demos)
+      if (match(method, url, 'POST', /^\/v0\/fixture\/upstream-health$/)) {
+        const raw = (await readJson(req)) as {
+          upstream_id?: string;
+          status?: 'ok' | 'degraded' | 'unreachable' | 'unknown';
+          reachable?: boolean;
+          last_error?: string;
+        };
+        if (!raw.upstream_id || !raw.status) {
+          sendJson(res, 400, {
+            error: 'invalid_request',
+            message: 'upstream_id and status required',
+          });
+          return;
+        }
+        const up = store.getUpstream(raw.upstream_id);
+        if (!up) {
+          sendJson(res, 404, {
+            error: 'not_found',
+            message: 'upstream not found',
+          });
+          return;
+        }
+        const snap = store.setUpstreamHealth(raw.upstream_id, up.org_id, {
+          status: raw.status,
+          reachable: raw.reachable ?? raw.status === 'ok',
+          last_error: raw.last_error,
+        });
+        await store.persist();
+        sendJson(res, 200, snap);
         return;
       }
 
@@ -208,6 +323,7 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
         }
         const upstreams = store.listUpstreams(org.id).map((u) => {
           const sec = store.getVaultSecret(u.id);
+          const health = store.getUpstreamHealth(u.id);
           return {
             id: u.id,
             adapter_type: u.adapter_type,
@@ -217,6 +333,7 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
             use_tls: u.use_tls,
             default_mountpoint: u.default_mountpoint,
             enabled: u.enabled,
+            health: health ?? null,
             secret: sec
               ? {
                   id: sec.id,
@@ -231,35 +348,56 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
         return;
       }
 
-      const health = match(
+      // Health endpoints
+      const healthOrg = match(
         method,
         url,
         'GET',
         /^\/v0\/orgs\/([^/]+)\/health$/,
       );
-      if (health) {
-        const orgId = health[1]!;
-        const sessions = store.liveSessionsForOrg(orgId).map((s) => ({
-          session_id: s.session_id,
-          device_id: s.device_id,
-          upstream_id: s.upstream_id,
-          started_at: s.started_at,
-          last_gga_age_ms: s.last_gga_at
-            ? Date.now() - Date.parse(s.last_gga_at)
-            : null,
-          // Ephemeral last_position exposed for live health only — not metering
-          has_last_position: Boolean(s.last_position),
-        }));
-        sendJson(res, 200, {
-          org_id: orgId,
-          active_sessions: sessions.length,
-          sessions,
-          notes:
-            'GGA/last-position for session health only — no track histories; metering = connect/bytes/device-days only',
-        });
+      if (healthOrg) {
+        const result = orgHealth(store, healthOrg[1]!);
+        sendJson(res, result.status, result.body);
         return;
       }
 
+      const healthUp = match(
+        method,
+        url,
+        'GET',
+        /^\/v0\/upstreams\/([^/]+)\/health$/,
+      );
+      if (healthUp) {
+        const result = upstreamHealth(store, healthUp[1]!);
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+      const healthDev = match(
+        method,
+        url,
+        'GET',
+        /^\/v0\/devices\/([^/]+)\/health$/,
+      );
+      if (healthDev) {
+        const result = deviceHealth(store, healthDev[1]!);
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+      const sessionsList = match(
+        method,
+        url,
+        'GET',
+        /^\/v0\/orgs\/([^/]+)\/sessions$/,
+      );
+      if (sessionsList) {
+        const result = listActiveSessions(store, sessionsList[1]!);
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+      // Audit query with filters
       const auditGet = match(
         method,
         url,
@@ -267,15 +405,21 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
         /^\/v0\/orgs\/([^/]+)\/audit$/,
       );
       if (auditGet) {
-        const org = getOrg(store, auditGet[1]!);
-        if (!org) {
-          sendJson(res, 404, {
-            error: 'not_found',
-            message: 'org not found',
-          });
-          return;
-        }
-        sendJson(res, 200, { events: store.listAudit(org.id) });
+        const result = queryAudit(store, auditGet[1]!, url);
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+      // Usage events + export + webhooks
+      const usageExport = match(
+        method,
+        url,
+        'GET',
+        /^\/v0\/orgs\/([^/]+)\/usage\/export$/,
+      );
+      if (usageExport) {
+        const result = exportUsage(store, usageExport[1]!, url);
+        sendJson(res, result.status, result.body);
         return;
       }
 
@@ -286,15 +430,22 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
         /^\/v0\/orgs\/([^/]+)\/usage\/events$/,
       );
       if (usageGet) {
-        const org = getOrg(store, usageGet[1]!);
-        if (!org) {
-          sendJson(res, 404, {
-            error: 'not_found',
-            message: 'org not found',
-          });
-          return;
-        }
-        sendJson(res, 200, { events: store.listMetering(org.id) });
+        const result = queryUsageEvents(store, usageGet[1]!, url);
+        sendJson(res, result.status, result.body);
+        return;
+      }
+
+      const usageWebhook = match(
+        method,
+        url,
+        'POST',
+        /^\/v0\/orgs\/([^/]+)\/usage\/webhooks$/,
+      );
+      if (usageWebhook) {
+        const raw = (await readJson(req)) as { url?: string; secret?: string };
+        const result = registerUsageWebhook(store, usageWebhook[1]!, raw);
+        if (result.status === 201) await store.persist();
+        sendJson(res, result.status, result.body);
         return;
       }
 
