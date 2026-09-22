@@ -1,0 +1,13 @@
+Copyright (C) Alexander Ness <ale98ne@gmail.com>
+
+This software is dual-licensed:
+
+1. Community / open use — GNU Affero General Public License v3.0 or later
+   (AGPL-3.0-or-later). See the LICENSE file for the full license text.
+   SPDX identifiers in package.json use AGPL-3.0-or-later for flexibility
+   with future AGPL versions.
+
+2. Commercial closed embed / SaaS — a separate commercial license from the
+   copyright holder is required. See COMMERCIAL.md for how to inquire.
+
+No additional permissions or warranties are granted by this NOTICE.
