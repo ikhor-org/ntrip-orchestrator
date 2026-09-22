@@ -61,6 +61,8 @@ Per deep-dive §5: Nordic construction machine-control SIs/OEMs → EU/NO commer
 
 ## 3. Explicit non-goals
 
+Canonical short list for product docs: [`NON-GOALS.md`](./NON-GOALS.md).
+
 These must remain visible in every Builder/Ops handoff. Spirit of deep-dive §4, plus Sentinel CLEAR holds.
 
 1. **No Kartverket CPOS displacement** — Do not market to Norwegian surveyors as a CPOS alternative; do not undercut CPOS survey pricing; do not claim to replace the national CORS for cadastral/survey workflows. CPOS may appear only as a *customer-supplied upstream* when the customer already holds a lawful subscription. **Complement Kartverket; do not compete.**

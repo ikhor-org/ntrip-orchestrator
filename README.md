@@ -1,54 +1,99 @@
 # grokbot
 
-Software-only **GNSS RTK OEM/fleet correction orchestration** plane.
+**GNSS RTK correction orchestration** for OEMs and fleets.
 
-Credential vault, multi-network NTRIP routing/failover, device provisioning, health/SLA, audit, and metering hooks — for OEMs, UAS fleets, autonomy stacks, and telematics/SIs. Upstream networks are feeds, not the SKU. Not another end-user survey CORS seat.
+Software that sits above correction networks: credential vault, multi-network NTRIP routing and failover, device provisioning, health/SLA, audit, and metering hooks. Upstream networks are feeds. Devices never see master logins.
 
-**License:** AGPL-3.0-or-later (community) + commercial — see `LICENSE`, `NOTICE`, and `COMMERCIAL.md`.
+Not another end-user survey CORS seat. Not a base-station network.
 
-| Field | Value |
+---
+
+## One-sitting demo
+
+Prove the plane locally: healthz up, mock caster streaming, proxy relays **MOCK**.
+
+```bash
+git clone https://github.com/AlexanderNess/grokbot.git
+cd grokbot
+cp .env.example .env
+# .env already has a local-dev VAULT_KEK and ALLOW_FIXTURE_ORGS=true — replace before any shared host
+
+docker compose --profile mock-caster up -d --build
+
+curl -fsS http://127.0.0.1:8080/healthz
+# expect JSON with ok: true
+```
+
+Wire the fixture org to the compose mock caster (host `mock-caster`, port `2102`, mount `MOCK`):
+
+```bash
+export API=http://127.0.0.1:8080
+FIXTURE_ORG=00000000-0000-4000-8000-000000000001
+
+UP=$(curl -fsS -X POST "$API/v0/fixture/upstream-secret" \
+  -H 'content-type: application/json' \
+  -d '{"display_name":"mock-caster","host":"mock-caster","port":2102,"mountpoint":"MOCK","username":"mock","password":"mock"}')
+echo "$UP"
+UPSTREAM_ID=$(echo "$UP" | jq -r .upstream_id)
+
+PROFILE=$(curl -fsS -X POST "$API/v0/orgs/$FIXTURE_ORG/profiles" \
+  -H 'content-type: application/json' \
+  -d "{\"name\":\"demo-mock\",\"candidates\":[{\"priority\":1,\"upstream_endpoint_id\":\"$UPSTREAM_ID\"}]}")
+PROFILE_ID=$(echo "$PROFILE" | jq -r .id)
+
+DEV=$(curl -fsS -X POST "$API/v0/orgs/$FIXTURE_ORG/devices" \
+  -H 'content-type: application/json' \
+  -d "{\"label\":\"demo-rover\",\"profile_id\":\"$PROFILE_ID\"}")
+echo "$DEV"
+# save pseudo_username / pseudo_password from the response
+```
+
+NTRIP client → `127.0.0.1:2101`, mountpoint **MOCK**, user/pass = the device pseudo-credentials. You should see a continuous mock RTCM-ish stream from the caster through the proxy.
+
+Failover demo (two upstreams, kill primary): `docs/runbooks/m2-failover-demo.md`.  
+Prod-shaped smoke (fixtures off, ops pilot path, SSH tunnel): `docs/runbooks/hetzner-deploy.md` §9.
+
+---
+
+## What it does
+
+| Capability | Role |
 | --- | --- |
-| **Milestone** | **M3** — screening unlock & first pilots |
-| **Date** | 21 Sep 2026 (Europe/Oslo) |
-| **Status** | Screening gate live for ops pilots; RBAC API keys; CPOS still disabled. Self-serve signup closed. | **Load test target** | **50 concurrent mocked sessions** — **provisional** (architecture O8 OPEN) |
+| Credential vault | AES-256-GCM; master upstream secrets stay server-side |
+| Pseudo-credentials | Field devices authenticate with disposable logins |
+| NTRIP proxy | Relays RTCM; policy picks primary/secondary with hysteresis |
+| Provisioning API | Devices, profiles, org API keys (`admin` / `operator` / `read`) |
+| Health / audit / usage | Path visibility, append-only audit, metering hooks (not fund custody) |
+| Screening gate | Live orgs activate only after ops clearance — no self-serve signup |
+
+Stack: TypeScript (Node 20+) monorepo — `packages/core`, `packages/api`, `packages/proxy`, `packages/adapters`. PostgreSQL migrations ship with compose; runtime store is still shared JSON (`GROKBOT_STORE_PATH`) until a PG adapter lands.
+
+OpenAPI: `docs/openapi/openapi.yaml`.
 
 ---
 
-## Stack
+## Non-goals
 
-**TypeScript (Node 20+) monorepo** — `packages/core`, `packages/api`, `packages/proxy`, `packages/adapters`.
+Standing constraints — full list in [`docs/NON-GOALS.md`](docs/NON-GOALS.md):
 
-- **Datastore:** PostgreSQL schema in `migrations/` (source of truth). Runtime uses in-memory store + optional JSON file (`GROKBOT_STORE_PATH`) so api + proxy share state locally.
-- **Vault:** AES-256-GCM; KEK from `VAULT_KEK` / `VAULT_MASTER_KEY` (32-byte hex or base64).
-- **Pseudo-creds:** scrypt password hashes.
-- **Policy:** ordered primary/secondary candidates; `unhealthy_after_ms` + `max_switches_per_hour` hysteresis.
-
----
-
-## M0 → M1 → M2 → M3
-
-| | M0 | M1 | M2 | M3 (this branch) |
-| --- | --- | --- | --- |
-| Vault | Ciphertext columns | **Real** AES-256-GCM | same |
-| Devices | 501 | **Real** fixture provision | same + profile_id |
-| Proxy | Auth stub | **Real** NTRIP relay | **Failover** via profile policy |
-| Policy | — | implicit single upstream | **Primary/secondary + hysteresis** |
-| Health API | basic org | basic | **upstreams + devices + sessions** |
-| Audit | writers | list | **Filtered query** (org/device/time/event_type) |
-| Usage | writers | list | **Export + signed webhook** |
-| Load test | — | — | **50 concurrent** (provisional) |
-| Docs | checklist | M1 runbook | M2 ToS/screening draft | **M3 screening live + RBAC runbooks** |
-| Live `POST /v0/orgs` | 403 | 403 | 403 | **Still 403; pilots via ops path** |
-
-**Merge order:** PR #1 `m0-skeleton` → `main`, then PR #2 `m1-generic-ntrip` → `m0-skeleton`, then this PR → `m1-generic-ntrip`.
+- No Kartverket CPOS replacement for Norwegian surveyors
+- No GNSS spoof / jam products or marketing
+- No military guidance packaging
+- No building CORS / base stations as the product
+- No holding customer funds
+- No live self-serve org signup (ops-screened pilots only)
+- CPOS adapter only after counsel; no fleet track histories
 
 ---
 
-## Non-goals (standing)
+## License
 
-See `docs/architecture.md` §3. In short: no CPOS displacement; no spoof/jam; no mil packaging; no CORS/base stations; no fund custody; **no live orgs until screening**; **CPOS post-counsel**; **no track histories** — GGA/last-position for live session health only; metering = connect / bytes / device-days only.
+**Dual-licensed.**
 
-ToS draft + screening runbooks: `docs/tos-draft.md`, `docs/runbooks/screening-workflow.md`, `credential-rotate-revoke.md`, `org-suspend.md`. **ToS remains draft** — do not claim production Terms. Self-serve signup remains closed; **pilots are ops-curated until counsel signs**. Active pilot device routes require an org API key. Active pilots vault upstreams via ops `POST /v0/ops/orgs/{org_id}/upstreams` (X-Ops-Key) — not `/v0/fixture/*`. Prod NTRIP smoke (SSH tunnel + mock caster): `docs/runbooks/hetzner-deploy.md` §9.
+- **Open:** [GNU Affero General Public License v3](LICENSE) (AGPL-3.0). Use, study, modify, and run the software under AGPL; network use requires offering corresponding source.
+- **Commercial:** Closed-source embed, proprietary redistribution, or SaaS without AGPL obligations requires a separate commercial license — see [`COMMERCIAL.md`](COMMERCIAL.md).
+
+Final commercial terms are owned by Alexander Ness. Nothing in this repo is legal advice.
 
 ---
 
@@ -59,127 +104,22 @@ npm install
 npm run build
 npm run lint
 npm test
-# optional: load test only
-npm run loadtest
 ```
+
+Local without Docker: set `VAULT_KEK` and `GROKBOT_STORE_PATH`, then `npm run dev:api` and `npm run dev:proxy` (see `.env.example`).
 
 ---
 
-## M2 runbook — demo failover
+## Docs map
 
-Concrete steps: **`docs/runbooks/m2-failover-demo.md`**.
-
-Short version:
-
-1. Start API + proxy with shared `GROKBOT_STORE_PATH` and `VAULT_KEK`.
-2. Seed **two** fixture upstream secrets (primary + secondary).
-3. `POST /v0/orgs/{fixture}/profiles` with candidates priority 1 then 2; set `failover.unhealthy_after_ms` (0 for snappy demo; 30000 default).
-4. Provision device with that `profile_id`.
-5. `POST /v0/fixture/upstream-health` mark primary `unreachable` **or** kill primary mock caster.
-6. Connect NTRIP with pseudo-cred → secondary serves RTCM; check `GET .../audit?event_type=session.failover`.
-
-Automated: `packages/proxy` failover tests mock primary connect failure → secondary RTCM + audit.
-
----
-
-## Key M2 endpoints
-
-```http
-POST   /v0/orgs/{org_id}/profiles
-GET    /v0/orgs/{org_id}/profiles
-GET    /v0/profiles/{profile_id}
-PUT    /v0/profiles/{profile_id}
-
-GET    /v0/orgs/{org_id}/health
-GET    /v0/upstreams/{upstream_id}/health
-GET    /v0/devices/{device_id}/health
-GET    /v0/orgs/{org_id}/sessions?status=active
-
-GET    /v0/orgs/{org_id}/audit?from=&to=&event_type=&device_id=&cursor=
-GET    /v0/orgs/{org_id}/usage/events?from=&to=&cursor=
-GET    /v0/orgs/{org_id}/usage/export?from=&to=&webhook_id=
-POST   /v0/orgs/{org_id}/usage/webhooks
-```
-
-OpenAPI: `docs/openapi/openapi.yaml`.
-
----
-
-## Docker / deploy packaging
-
-Local stack (API **8080**, NTRIP proxy **2101**, Postgres with `migrations/*.sql` on first init):
-
-```bash
-cp .env.example .env
-# set VAULT_KEK (required); local-dev may keep ALLOW_FIXTURE_ORGS=true
-docker compose up -d --build
-curl -fsS http://127.0.0.1:8080/healthz
-```
-
-Production overlay (forces `ALLOW_FIXTURE_ORGS=false`, requires `OPS_API_KEY` + strong `POSTGRES_PASSWORD`):
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d --build
-```
-
-**Caveat:** runtime store is still the shared JSON file (`GROKBOT_STORE_PATH` on volume `grokbot-store`). Postgres is provisioned and migrations applied for a later PG adapter — the app does not use SQL at runtime yet.
-
-Hetzner / Ubuntu copy-paste runbook: **`docs/runbooks/hetzner-deploy.md`**.
-
-## Local env
-
-```bash
-cp .env.example .env
-# Generate KEK:
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-export $(grep -v '^#' .env | xargs)
-rm -f "$GROKBOT_STORE_PATH"
-
-ALLOW_FIXTURE_ORGS=true VAULT_KEK=$VAULT_KEK GROKBOT_STORE_PATH=/tmp/grokbot-m2-store.json npm run dev:api
-ALLOW_FIXTURE_ORGS=true VAULT_KEK=$VAULT_KEK GROKBOT_STORE_PATH=/tmp/grokbot-m2-store.json npm run dev:proxy
-```
-
-PG migrations:
-
-```bash
-psql "$DATABASE_URL" -f migrations/001_initial.sql
-psql "$DATABASE_URL" -f migrations/002_m1_sessions.sql
-psql "$DATABASE_URL" -f migrations/003_m2_profiles_usage.sql
-psql "$DATABASE_URL" -f migrations/004_m3_screening_rbac.sql
-```
-
----
-
-## Real vs still stub / gated
-
-| Component | Status |
+| Doc | Purpose |
 | --- | --- |
-| Vault AES-256-GCM | **Real** |
-| Device pseudo-cred (fixture) | **Real** |
-| Generic NTRIP adapter | **Real** |
-| Profile policy primary/secondary | **Real** |
-| Failover + hysteresis | **Real** |
-| Health / audit query / usage export | **Real** |
-| Load test 50 concurrent (provisional) | **Real** (automated) |
-| ToS draft + screening runbook | **Draft** (ops-curated pilots; counsel unsigned) |
-| Point One / GEODNET / Skylark / SmartNet | **Stub** |
-| CPOS | **Disabled** |
-| Live org POST | **403 screening_required** |
+| [`COMMERCIAL.md`](COMMERCIAL.md) | Commercial license request stub |
+| [`docs/NON-GOALS.md`](docs/NON-GOALS.md) | Standing product/legal constraints |
+| [`docs/architecture.md`](docs/architecture.md) | v0 architecture |
+| [`docs/runbooks/`](docs/runbooks/) | Screening, rotate/revoke, suspend, deploy, failover |
+| [`docs/tos-draft.md`](docs/tos-draft.md) | ToS draft — not production Terms |
 
 ---
 
-*M3 screening unlock & first pilots. Stack on M2 (`m2-failover-ops`). Self-serve still closed; CPOS still disabled; Point One/GEODNET spike deferred.*
-
-
-## M3 — screening unlock & first pilots
-
-- **Real screening gate:** `Org.status` becomes `active` only when `screening_status=cleared` **and** attestation flags still true via ops activate.
-- **No self-serve:** `POST /v0/orgs` (live) still `403 screening_required`.
-- **Pilot path (ICP A preferred):** `POST /v0/ops/pilot-orgs` → screening → activate (ops `X-Ops-Key`). Ops-curated until counsel signs ToS.
-- **RBAC:** org API keys with roles `admin` / `operator` / `read`. Active (non-fixture) device list/provision/get always require a valid org API key.
-- **ToS:** remains **draft** (`docs/tos-draft.md`) — not production Terms.
-- **Runbooks:** `docs/runbooks/screening-workflow.md`, `credential-rotate-revoke.md`, `org-suspend.md`.
-- **Optional Point One / GEODNET adapter spike:** **deferred** (keep M3 tight; stubs remain).
-- **CPOS:** still DISABLED / not in routable registry (no counsel clearance).
-
-**Merge order:** PR #1 `m0-skeleton` → `main`, then #2 `m1-generic-ntrip` → `m0-skeleton`, then #3 `m2-failover-ops` → `m1-generic-ntrip`, then **this PR #4** `m3-screening-pilots` → `m2-failover-ops`.
+*The software is the argument. Run the demo.*
