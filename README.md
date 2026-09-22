@@ -6,17 +6,19 @@ Software that sits above correction networks: credential vault, multi-network NT
 
 Not another end-user survey CORS seat. Not a base-station network.
 
+**License:** AGPL-3.0-or-later (community) + commercial — see `LICENSE`, `NOTICE`, and [`COMMERCIAL.md`](COMMERCIAL.md).
+
 ---
 
 ## One-sitting demo
 
-Prove the plane locally: healthz up, mock caster streaming, proxy relays **MOCK**.
+Localhost only (API/proxy bind `127.0.0.1` by default). Prove the plane: healthz up, mock caster streaming, proxy relays **MOCK**.
 
 ```bash
 git clone https://github.com/AlexanderNess/grokbot.git
 cd grokbot
 cp .env.example .env
-# .env already has a local-dev VAULT_KEK and ALLOW_FIXTURE_ORGS=true — replace before any shared host
+# .env has a local-dev VAULT_KEK and ALLOW_FIXTURE_ORGS=true — replace before any shared host
 
 docker compose --profile mock-caster up -d --build
 
@@ -90,7 +92,7 @@ Standing constraints — full list in [`docs/NON-GOALS.md`](docs/NON-GOALS.md):
 
 **Dual-licensed.**
 
-- **Open:** [GNU Affero General Public License v3](LICENSE) (AGPL-3.0). Use, study, modify, and run the software under AGPL; network use requires offering corresponding source.
+- **Open / community:** [GNU Affero General Public License v3 or later](LICENSE) (`AGPL-3.0-or-later`). Use, study, modify, and run under AGPL; network use requires offering corresponding source. Copyright and SPDX: see [`NOTICE`](NOTICE).
 - **Commercial:** Closed-source embed, proprietary redistribution, or SaaS without AGPL obligations requires a separate commercial license — see [`COMMERCIAL.md`](COMMERCIAL.md).
 
 Final commercial terms are owned by Alexander Ness. Nothing in this repo is legal advice.
@@ -114,7 +116,8 @@ Local without Docker: set `VAULT_KEK` and `GROKBOT_STORE_PATH`, then `npm run de
 
 | Doc | Purpose |
 | --- | --- |
-| [`COMMERCIAL.md`](COMMERCIAL.md) | Commercial license request stub |
+| [`COMMERCIAL.md`](COMMERCIAL.md) | Commercial license inquiry stub |
+| [`NOTICE`](NOTICE) | Copyright + dual-license notice |
 | [`docs/NON-GOALS.md`](docs/NON-GOALS.md) | Standing product/legal constraints |
 | [`docs/architecture.md`](docs/architecture.md) | v0 architecture |
 | [`docs/runbooks/`](docs/runbooks/) | Screening, rotate/revoke, suspend, deploy, failover |

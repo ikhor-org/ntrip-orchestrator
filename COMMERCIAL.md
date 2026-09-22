@@ -1,21 +1,21 @@
 # Commercial licensing
 
 **Status:** stub  
-**Not legal advice.** Alexander Ness owns final commercial terms. This file is a placeholder until counsel and pricing are set.
+**Not legal advice.** This file does not grant commercial rights. Alexander Ness owns final commercial terms.
 
 ## Dual license (summary)
 
 | Path | What it covers |
 | --- | --- |
-| **AGPL-3.0** (`LICENSE`) | Open use under the Affero GPL: run and modify the software; if you provide it as a network service, you must offer corresponding source to users. |
+| **AGPL-3.0-or-later** (`LICENSE`, `NOTICE`) | Community / open use under the Affero GPL: run and modify the software; if you provide it as a network service, you must offer corresponding source to users. |
 | **Commercial license** | Permission to embed or redistribute grokbot in a **closed** product, or to operate it as **SaaS / hosted service**, **without** AGPL copyleft obligations that would otherwise apply to that use. |
 
-Everything not granted in a signed commercial agreement remains under AGPL-3.0.
+Everything not granted in a signed commercial agreement remains under AGPL-3.0-or-later.
 
 ## What stays AGPL
 
-- The public repository and default distribution remain AGPL-3.0.
-- Contributions to the open project are under AGPL-3.0 unless a separate contributor agreement says otherwise (none published yet).
+- The public repository and default distribution remain AGPL-3.0-or-later.
+- Contributions to the open project are under AGPL-3.0-or-later unless a separate contributor agreement says otherwise (none published yet).
 - Using the open build under AGPL does **not** require a commercial license.
 
 ## What a commercial license is for
@@ -26,13 +26,13 @@ Typical cases (illustrative — final schedule TBD):
 - Offering a hosted correction-orchestration service without AGPL network-source obligations
 - Other closed redistribution or embed arrangements agreed in writing
 
-## How to request a commercial license
+## How to inquire
 
-1. Email **`licensing@CHANGE-ME.example`** (placeholder — replace with the address Alexander publishes).
+1. Contact the copyright holder named in [`NOTICE`](NOTICE) — **Alexander Ness** `<ale98ne@gmail.com>`.
 2. Include: organization name, country, intended use (embed / SaaS / other), approximate device or seat scale, and whether you need indemnity/SLA language.
-3. Expect a written quote and terms from Alexander (or counsel). Do not assume a license until countersigned.
+3. Expect written terms negotiated case-by-case. Do not assume a license until countersigned.
 
-Until that address is published, contact the repository owner via the GitHub account on [AlexanderNess/grokbot](https://github.com/AlexanderNess/grokbot).
+No secrets, pricing tables, or signed terms live in this repository.
 
 ## Standing product constraints
 
