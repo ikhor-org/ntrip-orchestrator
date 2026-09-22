@@ -2,8 +2,10 @@
 # Runtime store is still JSON via GROKBOT_STORE_PATH until a PG adapter lands.
 # Postgres is provisioned and migrations applied on first init.
 #
-# Usage:
-#   cp .env.example .env   # edit secrets; never commit .env
+# Local demo (localhost only; no Hetzner; includes mock NTRIP caster):
+#   cp .env.example .env   # API_BIND/PROXY_BIND default 127.0.0.1 — never commit .env
+#   docker compose --profile mock-caster up --build
+# Stack without mock caster:
 #   docker compose up -d --build
 # Prod overlay: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
@@ -15,7 +17,7 @@ services:
     image: grokbot:local
     command: ["node", "packages/api/dist/main.js"]
     ports:
-      - "${API_BIND:-0.0.0.0}:${API_PORT:-8080}:8080"
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8080}:8080"
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       API_PORT: "8080"
@@ -51,7 +53,7 @@ services:
       dockerfile: Dockerfile
     command: ["node", "packages/proxy/dist/main.js"]
     ports:
-      - "${PROXY_BIND:-0.0.0.0}:${PROXY_PORT:-2101}:2101"
+      - "${PROXY_BIND:-127.0.0.1}:${PROXY_PORT:-2101}:2101"
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PROXY_PORT: "2101"
@@ -92,9 +94,9 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # Optional local/mock NTRIP caster for Ops smoke (no vendor creds).
-  # Start: docker compose --profile mock-caster up -d mock-caster
-  # Vault host=mock-caster port=2102 mountpoint=MOCK user/pass from env (or open).
+  # Optional local/mock NTRIP caster for localhost NTRIP smoke (no vendor creds).
+  # Start with full stack: docker compose --profile mock-caster up --build
+  # Vault host=mock-caster port=2102 mountpoint=MOCK user/pass from env (dummy only).
   mock-caster:
     image: node:20-bookworm-slim
     profiles: ["mock-caster"]

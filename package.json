@@ -2,6 +2,7 @@
   "name": "grokbot",
   "version": "0.3.0",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "description": "M3 screening unlock & first pilots \u2014 GNSS RTK OEM/fleet correction orchestration",
   "workspaces": [
     "packages/*"
