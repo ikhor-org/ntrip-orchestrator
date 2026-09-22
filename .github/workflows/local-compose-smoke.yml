@@ -1,0 +1,38 @@
+# Cold-clone McAfee path: compose mock-caster profile → healthz + NTRIP MOCK ICY/200.
+name: local-compose-smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: local-compose-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq jq
+
+      - name: Seed local .env from example
+        run: cp .env.example .env
+
+      - name: Docker Compose version
+        run: docker version && docker compose version
+
+      - name: Local compose smoke (README one-sitting path)
+        run: ./scripts/smoke-local.sh
+
+      - name: Compose diagnostics on failure
+        if: failure()
+        run: |
+          docker compose --profile mock-caster ps -a || true
+          docker compose --profile mock-caster logs --tail=200 || true
