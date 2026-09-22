@@ -4,6 +4,8 @@ Software-only **GNSS RTK OEM/fleet correction orchestration** plane.
 
 Credential vault, multi-network NTRIP routing/failover, device provisioning, health/SLA, audit, and metering hooks — for OEMs, UAS fleets, autonomy stacks, and telematics/SIs. Upstream networks are feeds, not the SKU. Not another end-user survey CORS seat.
 
+**License:** AGPL-3.0-or-later (community) + commercial — see `LICENSE`, `NOTICE`, and `COMMERCIAL.md`.
+
 | Field | Value |
 | --- | --- |
 | **Milestone** | **M3** — screening unlock & first pilots |
