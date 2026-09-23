@@ -6,7 +6,7 @@
 | **Date** | 22 Sep 2026 (Europe/Oslo) |
 | **Source** | Architecture §3 · decision record · Sentinel counsel |
 
-These constraints are product law for grokbot. Do not weaken them in marketing, demos, or pilot talk-tracks.
+These constraints are product law for Ntrip Orchestrator. Do not weaken them in marketing, demos, or pilot talk-tracks.
 
 1. **No Kartverket CPOS replacement** — Do not market to Norwegian surveyors as a CPOS alternative; do not undercut CPOS survey pricing; do not claim to replace the national CORS for cadastral/survey workflows. CPOS may appear only as a *customer-supplied upstream* when the customer already holds a lawful subscription. Complement Kartverket; do not compete.
 

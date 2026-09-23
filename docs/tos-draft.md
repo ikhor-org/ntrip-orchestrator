@@ -13,7 +13,7 @@
 
 ## 1. Service description (draft)
 
-grokbot provides a software-only GNSS RTK **correction orchestration** plane: credential vault, NTRIP proxy with multi-upstream failover, device pseudo-credentials, health/SLA signals, audit logs, and usage metering events (connect / bytes / device-days). We do not operate CORS base stations in v0.
+Ntrip Orchestrator provides a software-only GNSS RTK **correction orchestration** plane: credential vault, NTRIP proxy with multi-upstream failover, device pseudo-credentials, health/SLA signals, audit logs, and usage metering events (connect / bytes / device-days). We do not operate CORS base stations in v0.
 
 ## 2. Permitted end use (draft)
 

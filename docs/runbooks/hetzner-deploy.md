@@ -38,13 +38,13 @@ docker compose version
 
 ```bash
 # First time
-sudo mkdir -p /opt/grokbot
-sudo chown "$USER:$USER" /opt/grokbot
-git clone https://github.com/AlexanderNess/grokbot.git /opt/grokbot
-cd /opt/grokbot
+sudo mkdir -p /opt/ntrip-orchestrator
+sudo chown "$USER:$USER" /opt/ntrip-orchestrator
+git clone https://github.com/ikhor-org/ntrip-orchestrator.git /opt/ntrip-orchestrator
+cd /opt/ntrip-orchestrator
 
 # Updates
-cd /opt/grokbot
+cd /opt/ntrip-orchestrator
 git fetch origin
 git checkout main
 git pull --ff-only origin main
@@ -55,7 +55,7 @@ git pull --ff-only origin main
 ## 3. Secrets (never commit)
 
 ```bash
-cd /opt/grokbot
+cd /opt/ntrip-orchestrator
 cp .env.example .env
 chmod 600 .env
 
@@ -101,7 +101,7 @@ If you previously allowed 8080/2101 for an older bring-up, remove them before sm
 ## 5. Bring the stack up (production overlay)
 
 ```bash
-cd /opt/grokbot
+cd /opt/ntrip-orchestrator
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d --build
 docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f --tail=100
@@ -112,7 +112,7 @@ Migrations under `migrations/*.sql` are mounted into Postgres `docker-entrypoint
 If you need to re-apply by hand (new volume or ops recovery) — Postgres is **not** published on the host; use `exec`:
 
 ```bash
-cd /opt/grokbot
+cd /opt/ntrip-orchestrator
 for f in migrations/001_initial.sql migrations/002_m1_sessions.sql          migrations/003_m2_profiles_usage.sql migrations/004_m3_screening_rbac.sql; do
   docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres     psql -U grokbot -d grokbot < "$f"
 done
@@ -125,7 +125,7 @@ done
 ```bash
 # On the server (with API_BIND=127.0.0.1)
 curl -fsS http://127.0.0.1:8080/healthz | jq .
-# Expect: ok=true, service=grokbot-api, milestone=M3
+# Expect: ok=true, service=ntrip-orchestrator-api, milestone=M3
 
 # From your laptop via SSH tunnel (see §9) — not a public HOST:8080
 curl -fsS http://127.0.0.1:8080/healthz
@@ -204,7 +204,7 @@ Then all `curl` / NTRIP client calls below use `http://127.0.0.1:8080` and `127.
 On the VPS (no vendor secrets required):
 
 ```bash
-cd /opt/grokbot
+cd /opt/ntrip-orchestrator
 # Optional: set dummy creds in .env (never commit). Defaults are mock/mock if unset in compose.
 # MOCK_CASTER_USER=mock
 # MOCK_CASTER_PASS=mock

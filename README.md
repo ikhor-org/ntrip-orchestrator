@@ -1,4 +1,6 @@
-# grokbot
+# Ntrip Orchestrator
+
+RTK/NTRIP correction orchestration for OEM and fleet use — by Ikhor AS. Self-run: clone and run.
 
 **GNSS RTK correction orchestration** for OEMs and fleets.
 
@@ -17,8 +19,8 @@ Localhost only (API/proxy bind `127.0.0.1` by default). Prove the plane: healthz
 **Automated (CI + cold clone):** Docker, `curl`, and `jq` required.
 
 ```bash
-git clone https://github.com/AlexanderNess/grokbot.git
-cd grokbot
+git clone https://github.com/ikhor-org/ntrip-orchestrator.git
+cd ntrip-orchestrator
 ./scripts/smoke-local.sh
 # copies .env.example → .env if needed, boots compose --profile mock-caster,
 # asserts GET /healthz and NTRIP MOCK ICY/200 with body bytes (curl timeout OK)
@@ -109,11 +111,11 @@ Standing constraints — full list in [`docs/NON-GOALS.md`](docs/NON-GOALS.md):
 
 ## License
 
-**Product:** self-run under [AGPL-3.0-or-later](LICENSE). Clone and operate it yourself. Copyright and SPDX: see [`NOTICE`](NOTICE).
+**Product:** self-run under [AGPL-3.0-or-later](LICENSE) by default. Clone and operate it yourself. Copyright: Ikhor AS (org.nr 935 459 540) — see [`NOTICE`](NOTICE).
 
-**Dual-license (legal armor only):** a separate commercial license may cover **closed embed** or **closed redistribution** without AGPL obligations — see [`COMMERCIAL.md`](COMMERCIAL.md). That is not a hosted SaaS offering and not a product roadmap item.
+**Optional commercial (closed embed):** rights for closed embedding or closed redistribution without AGPL obligations — see [`COMMERCIAL.md`](COMMERCIAL.md). Inquire at [contact@ikhor.io](mailto:contact@ikhor.io) ([https://ikhor.io/](https://ikhor.io/)). Self-hosted; dual-license is legal armor only, not a SaaS offer.
 
-Final commercial terms are owned by Alexander Ness. Nothing in this repo is legal advice.
+Nothing in this repo is legal advice.
 
 ---
 

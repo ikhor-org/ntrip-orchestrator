@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
-  title: grokbot Control API
+  title: Ntrip Orchestrator Control API
   version: 0.3.0-m3
   description: |
-    M3 control API for GNSS RTK OEM/fleet correction orchestration.
+    Ntrip Orchestrator M3 control API for GNSS RTK OEM/fleet correction orchestration.
     Profile policy primary/secondary + failover hysteresis; health/audit/usage APIs.
     Live org provisioning is gated: POST /v0/orgs without screening → 403 screening_required.
     Fixture orgs only in non-prod when ALLOW_FIXTURE_ORGS=true.
