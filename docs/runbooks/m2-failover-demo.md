@@ -1,5 +1,8 @@
 # M2 failover demo runbook
 
+> **Fixture / local lab only.** This runbook uses `ALLOW_FIXTURE_ORGS=true` and `POST /v0/fixture/*`.
+> For **ops / prod-shaped** dual-endpoint failover (customer or sandbox caster, fixtures off, connect-fail — no fixture health POST), use [`customer-ntrip-caster.md`](customer-ntrip-caster.md) §6.
+
 **Goal:** Show primary mock upstream fail → secondary takes over, with hysteresis config and audit.
 
 ## Prerequisites
@@ -98,3 +101,7 @@ Expect: session on secondary; audit `session.failover` or `session.started` with
 ## Hysteresis note
 
 With `unhealthy_after_ms: 30000`, mid-session failover waits 30s of continuous unhealthy before switching, and `max_switches_per_hour` caps flapping (default 10).
+
+## Ops twin
+
+Production-shaped dual upstreams (ops vault, fixtures off, SSH tunnel): [`customer-ntrip-caster.md`](customer-ntrip-caster.md) §2–§6. Prefer connect-fail failover; do not rely on `POST /v0/fixture/upstream-health` outside this fixture lab.

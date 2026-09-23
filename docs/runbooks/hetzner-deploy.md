@@ -322,4 +322,8 @@ curl -sS -X POST "$API/v0/fixture/upstream-secret" \
 - Proxy dials vaulted caster (mock or your test caster) and returns a clear stream over the SSH tunnel.
 - `ALLOW_FIXTURE_ORGS=false` throughout; `/v0/fixture/*` remains 403.
 
-Related: `screening-workflow.md`, `m2-failover-demo.md` (fixture-only demos).
+Related: `screening-workflow.md`, [`customer-ntrip-caster.md`](customer-ntrip-caster.md) (real/sandbox caster + ops dual failover), `m2-failover-demo.md` (fixture-only demos).
+
+### 9.6 Customer / sandbox caster (beyond mock)
+
+For an operator-owned or customer NTRIP seat (not compose `mock-caster`), vault `$NTRIP_HOST` / `$NTRIP_PORT` / `$NTRIP_MOUNT` / `$NTRIP_USER` / `$NTRIP_PASS` via the same `POST /v0/ops/orgs/$ORG_ID/upstreams` call — **placeholders only in docs/chat**. Full steps, dual-endpoint connect-fail failover, and rotate pointers: [`customer-ntrip-caster.md`](customer-ntrip-caster.md).

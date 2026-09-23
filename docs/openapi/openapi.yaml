@@ -413,7 +413,10 @@ paths:
       summary: Ops vault upstream NTRIP secret for activated pilot org
       description: |
         Requires X-Ops-Key. Org must be active with screening_status=cleared (not fixture).
-        Creates UpstreamEndpoint + vaulted ntrip_basic secret. Never returns plaintext password.
+        Creates UpstreamEndpoint + vaulted ntrip_basic secret (customer/sandbox NTRIP caster:
+        host, port, mountpoint, username, password). Never returns plaintext password.
+        Bind via profile candidates + device; dual-endpoint failover uses connect failure
+        (no fixture health mark). Ops runbook: docs/runbooks/customer-ntrip-caster.md.
         Fixture route POST /v0/fixture/upstream-secret remains gated by ALLOW_FIXTURE_ORGS.
       parameters:
         - $ref: "#/components/parameters/OrgId"
