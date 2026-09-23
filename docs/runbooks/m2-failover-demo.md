@@ -18,14 +18,14 @@ npm run build
 Terminal A — API:
 
 ```bash
-ALLOW_FIXTURE_ORGS=true VAULT_KEK=$VAULT_KEK GROKBOT_STORE_PATH=/tmp/grokbot-m2-store.json \
+ALLOW_FIXTURE_ORGS=true VAULT_KEK=$VAULT_KEK GROKBOT_STORE_PATH=/tmp/ntrip-orchestrator-m2-store.json \
   npm run dev:api
 ```
 
 Terminal B — proxy:
 
 ```bash
-ALLOW_FIXTURE_ORGS=true VAULT_KEK=$VAULT_KEK GROKBOT_STORE_PATH=/tmp/grokbot-m2-store.json \
+ALLOW_FIXTURE_ORGS=true VAULT_KEK=$VAULT_KEK GROKBOT_STORE_PATH=/tmp/ntrip-orchestrator-m2-store.json \
   npm run dev:proxy
 ```
 
