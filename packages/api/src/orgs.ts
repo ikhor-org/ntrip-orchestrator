@@ -6,7 +6,7 @@ import {
   orgIsUsable,
   ScreeningStatus,
   Store,
-} from '@grokbot/core';
+} from '@ntrip-orchestrator/core';
 import { actorAuditFields, AuthActor } from './auth.js';
 import { ApiConfig } from './config.js';
 import { ApiErrorBody } from './types.js';

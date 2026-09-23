@@ -1,15 +1,14 @@
-Copyright (C) Alexander Ness <ale98ne@gmail.com>
+Ntrip Orchestrator
+Copyright (C) Ikhor AS (org.nr 935 459 540)
 
-This software is dual-licensed:
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-1. Community / open use — GNU Affero General Public License v3.0 or later
-   (AGPL-3.0-or-later). See the LICENSE file for the full license text.
-   SPDX identifiers in package.json use AGPL-3.0-or-later for flexibility
-   with future AGPL versions. The intended product path is self-run under AGPL.
+See the LICENSE file for the full AGPL-3.0-or-later text.
 
-2. Commercial — a separate commercial license from the copyright holder may
-   grant rights for closed embed or closed redistribution without AGPL
-   obligations. See COMMERCIAL.md. Dual-license is legal armor; there is no
-   hosted SaaS / cloud product offering in this project.
-
-No additional permissions or warranties are granted by this NOTICE.
+For a commercial license covering closed embedding or closed redistribution
+without AGPL obligations, contact Ikhor AS at contact@ikhor.io
+(https://ikhor.io/). There is no hosted SaaS offering from this project;
+dual-licensing is legal armor for closed use, not a product roadmap.

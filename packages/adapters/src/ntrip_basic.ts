@@ -184,7 +184,7 @@ export const ntripBasicAdapter: Adapter = {
       throw new AdapterConnectError('unreachable', msg);
     }
 
-    const ua = hints.userAgent ?? 'grokbot-ntrip-basic/0.1';
+    const ua = hints.userAgent ?? 'ntrip-orchestrator-ntrip-basic/0.1';
     const req =
       `GET ${mountPath} HTTP/1.0\r\n` +
       `User-Agent: ${ua}\r\n` +

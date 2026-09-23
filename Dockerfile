@@ -1,4 +1,4 @@
-# Multi-stage Node 20 build of the grokbot monorepo (api + proxy).
+# Multi-stage Node 20 build of the ntrip-orchestrator monorepo (api + proxy).
 # Production images run the built JS; default CMD is the API.
 
 FROM node:20-bookworm-slim AS build

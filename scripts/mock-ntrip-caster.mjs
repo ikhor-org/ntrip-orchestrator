@@ -8,7 +8,7 @@
  *   - Streams fixed RTCM-ish bytes on an interval
  *
  * Env:
- *   MOCK_CASTER_PORT      default 2102 (avoid colliding with grokbot proxy :2101)
+ *   MOCK_CASTER_PORT      default 2102 (avoid colliding with ntrip-orchestrator proxy :2101)
  *   MOCK_CASTER_HOST      default 0.0.0.0
  *   MOCK_CASTER_MOUNT     default MOCK
  *   MOCK_CASTER_USER      optional; if set with PASS, enforce Basic auth
@@ -101,7 +101,7 @@ const server = net.createServer((sock) => {
       return;
     }
 
-    sock.write('ICY 200 OK\r\nServer: grokbot-mock-ntrip-caster\r\nContent-Type: gnss/data\r\n\r\n');
+    sock.write('ICY 200 OK\r\nServer: ntrip-orchestrator-mock-ntrip-caster\r\nContent-Type: gnss/data\r\n\r\n');
     streaming = true;
     sock.write(MOCK_CHUNK);
     timer = setInterval(() => {

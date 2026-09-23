@@ -5,7 +5,7 @@ import {
   hashPassword,
   Store,
   verifyPassword,
-} from '@grokbot/core';
+} from '@ntrip-orchestrator/core';
 import { ApiErrorBody } from './types.js';
 
 export type AuthActor =

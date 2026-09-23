@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { test } from 'node:test';
-import { generateKekHex, Store } from '@grokbot/core';
+import { generateKekHex, Store } from '@ntrip-orchestrator/core';
 import { loadConfig } from './config.js';
 import { createServer } from './server.js';
 
@@ -264,7 +264,7 @@ test('fixture upstream-secret still 403 when ALLOW_FIXTURE_ORGS=false', async ()
 
 test('ops upstream vault rejects fixture org id', async () => {
   await withServer({ ALLOW_FIXTURE_ORGS: 'false' }, async (server) => {
-    const { FIXTURE_ORG_ID } = await import('@grokbot/core');
+    const { FIXTURE_ORG_ID } = await import('@ntrip-orchestrator/core');
     const res = await request(
       server,
       'POST',

@@ -1,4 +1,4 @@
-import { Store } from '@grokbot/core';
+import { Store } from '@ntrip-orchestrator/core';
 import { ApiErrorBody } from './types.js';
 
 export function orgHealth(store: Store, orgId: string): {

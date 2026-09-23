@@ -3,7 +3,7 @@ export type {
   OrgStatus,
   ScreeningStatus,
   Device,
-} from '@grokbot/core';
+} from '@ntrip-orchestrator/core';
 
 export interface ApiErrorBody {
   error: string;

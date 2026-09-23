@@ -4,8 +4,8 @@ import { test } from 'node:test';
 import {
   getCposStubDisabled,
   listRoutableAdapters,
-} from '@grokbot/adapters';
-import { generateKekHex, Store } from '@grokbot/core';
+} from '@ntrip-orchestrator/adapters';
+import { generateKekHex, Store } from '@ntrip-orchestrator/core';
 import { loadConfig } from './config.js';
 import { createServer } from './server.js';
 

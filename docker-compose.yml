@@ -14,7 +14,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: grokbot:local
+    image: ntrip-orchestrator:local
     command: ["node", "packages/api/dist/main.js"]
     ports:
       - "${API_BIND:-127.0.0.1}:${API_PORT:-8080}:8080"
@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
 
   proxy:
-    image: grokbot:local
+    image: ntrip-orchestrator:local
     build:
       context: .
       dockerfile: Dockerfile

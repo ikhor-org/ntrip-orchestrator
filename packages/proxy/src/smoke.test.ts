@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import net from 'node:net';
 import { test } from 'node:test';
-import { getRoutableAdapter } from '@grokbot/adapters';
+import { getRoutableAdapter } from '@ntrip-orchestrator/adapters';
 import {
   Device,
   encryptJson,
@@ -16,7 +16,7 @@ import {
   Store,
   UpstreamEndpoint,
   VaultSecretRecord,
-} from '@grokbot/core';
+} from '@ntrip-orchestrator/core';
 import { createProxyServer } from './server.js';
 import { setUpstreamConnectOverride } from './relay.js';
 import { loadProxyConfig } from './config.js';

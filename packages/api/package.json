@@ -1,5 +1,5 @@
 {
-  "name": "@grokbot/api",
+  "name": "@ntrip-orchestrator/api",
   "version": "0.0.0",
   "private": true,
   "license": "AGPL-3.0-or-later",
@@ -10,7 +10,7 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@grokbot/adapters": "0.0.0",
-    "@grokbot/core": "0.0.0"
+    "@ntrip-orchestrator/adapters": "0.0.0",
+    "@ntrip-orchestrator/core": "0.0.0"
   }
 }

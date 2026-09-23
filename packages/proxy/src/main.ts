@@ -1,4 +1,4 @@
-import { getDefaultStore } from '@grokbot/core';
+import { getDefaultStore } from '@ntrip-orchestrator/core';
 import { loadProxyConfig } from './config.js';
 import { createProxyServer } from './server.js';
 
@@ -11,7 +11,7 @@ async function main(): Promise<void> {
   server.listen(config.port, () => {
     // eslint-disable-next-line no-console
     console.log(
-      `grokbot-proxy M1 listening on :${config.port} (generic NTRIP relay)`,
+      `ntrip-orchestrator-proxy M1 listening on :${config.port} (generic NTRIP relay)`,
     );
   });
 }

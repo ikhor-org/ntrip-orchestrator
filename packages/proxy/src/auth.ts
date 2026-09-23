@@ -2,7 +2,7 @@
  * NTRIP Basic Auth against pseudo-credentials — never against upstream master.
  */
 
-import { Store, verifyPassword } from '@grokbot/core';
+import { Store, verifyPassword } from '@ntrip-orchestrator/core';
 
 export interface PseudoIdentity {
   deviceId: string;
