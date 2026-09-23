@@ -23,9 +23,9 @@
 
 ## Vault upstream secrets
 
-1. Rotate upstream password/token at the provider.
-2. Re-seed / update vault secret via fixture/admin vault path (pilot: ops-assisted).
-3. Confirm failover/health still green; audit vault mutation.
+1. Rotate upstream password/token at the provider (customer caster or sandbox).
+2. Re-vault for **activated pilot orgs** via ops: `POST /v0/ops/orgs/{org_id}/upstreams` with `X-Ops-Key` (see [`customer-ntrip-caster.md`](customer-ntrip-caster.md)). Local fixture lab only: `POST /v0/fixture/upstream-secret` when `ALLOW_FIXTURE_ORGS=true`.
+3. Point the profile candidates at the new `upstream_id`; confirm failover/health still green; audit shows `vault.secret.created` (no plaintext).
 
 ## Roles reminder
 

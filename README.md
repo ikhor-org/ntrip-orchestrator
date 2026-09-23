@@ -70,7 +70,8 @@ Quick NTRIP assert (streaming; curl exit 28 after `--max-time` is fine if header
 curl -v -N --http0.9 -u "$PSEUDO_USER:$PSEUDO_PASS" --max-time 3 "http://127.0.0.1:2101/MOCK"
 ```
 
-Failover demo (two upstreams, kill primary): `docs/runbooks/m2-failover-demo.md`.  
+Failover demo (fixture lab, two upstreams): `docs/runbooks/m2-failover-demo.md`.  
+**Real / sandbox caster** (ops vault, fixtures off, dual-endpoint connect-fail failover): `docs/runbooks/customer-ntrip-caster.md`.  
 Prod-shaped smoke (fixtures off, ops pilot path, SSH tunnel): `docs/runbooks/hetzner-deploy.md` §9.
 
 ---
@@ -138,7 +139,7 @@ Local without Docker: set `VAULT_KEK` and `GROKBOT_STORE_PATH`, then `npm run de
 | [`NOTICE`](NOTICE) | Copyright + dual-license notice |
 | [`docs/NON-GOALS.md`](docs/NON-GOALS.md) | Standing product/legal constraints |
 | [`docs/architecture.md`](docs/architecture.md) | v0 architecture |
-| [`docs/runbooks/`](docs/runbooks/) | Screening, rotate/revoke, suspend, deploy, failover |
+| [`docs/runbooks/`](docs/runbooks/) | Screening, rotate/revoke, suspend, deploy, customer NTRIP caster, failover |
 | [`docs/tos-draft.md`](docs/tos-draft.md) | ToS draft — not production Terms |
 
 ---
