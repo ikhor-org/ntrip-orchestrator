@@ -1,6 +1,6 @@
 # Ntrip Orchestrator
 
-RTK/NTRIP correction orchestration for OEM and fleet use — by Ikhor AS. Self-run: clone and run.
+**by [Ikhor AS](https://ikhor.io/)** (org.nr 935 459 540)
 
 **GNSS RTK correction orchestration** for OEMs and fleets.
 
@@ -9,6 +9,8 @@ Software that sits above correction networks: credential vault, multi-network NT
 Not another end-user survey CORS seat. Not a base-station network.
 
 **License:** AGPL-3.0-or-later (self-run). Dual-license is legal armor for closed embed — see `LICENSE`, `NOTICE`, and [`COMMERCIAL.md`](COMMERCIAL.md). No hosted SaaS product.
+
+**Contact:** [contact@ikhor.io](mailto:contact@ikhor.io) · [GitHub Issues](https://github.com/ikhor-org/ntrip-orchestrator/issues)
 
 ---
 
@@ -111,11 +113,11 @@ Standing constraints — full list in [`docs/NON-GOALS.md`](docs/NON-GOALS.md):
 
 ## License
 
-**Product:** self-run under [AGPL-3.0-or-later](LICENSE) by default. Clone and operate it yourself. Copyright: Ikhor AS (org.nr 935 459 540) — see [`NOTICE`](NOTICE).
+**Product:** self-run under [AGPL-3.0-or-later](LICENSE). Clone and operate it yourself. Copyright and SPDX: see [`NOTICE`](NOTICE).
 
-**Optional commercial (closed embed):** rights for closed embedding or closed redistribution without AGPL obligations — see [`COMMERCIAL.md`](COMMERCIAL.md). Inquire at [contact@ikhor.io](mailto:contact@ikhor.io) ([https://ikhor.io/](https://ikhor.io/)). Self-hosted; dual-license is legal armor only, not a SaaS offer.
+**Dual-license (legal armor only):** a separate commercial license may cover **closed embed** or **closed redistribution** without AGPL obligations — see [`COMMERCIAL.md`](COMMERCIAL.md). That is not a hosted SaaS offering and not a product roadmap item.
 
-Nothing in this repo is legal advice.
+Final commercial terms are owned by **Ikhor AS** (org.nr 935 459 540). Contact: [contact@ikhor.io](mailto:contact@ikhor.io). Nothing in this repo is legal advice.
 
 ---
 
