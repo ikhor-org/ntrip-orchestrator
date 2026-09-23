@@ -71,6 +71,10 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      # When profile mock-caster is on, wait for it; omit otherwise (Compose 2.20+).
+      mock-caster:
+        condition: service_healthy
+        required: false
     restart: unless-stopped
 
   postgres:
@@ -114,6 +118,18 @@ services:
     # Proxy reaches it as host "mock-caster" on the compose network.
     expose:
       - "2102"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('net').connect(2102,'127.0.0.1',()=>process.exit(0)).on('error',()=>process.exit(1)).setTimeout(2000,()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 3s
     restart: unless-stopped
 
 

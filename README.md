@@ -14,9 +14,21 @@ Not another end-user survey CORS seat. Not a base-station network.
 
 Localhost only (API/proxy bind `127.0.0.1` by default). Prove the plane: healthz up, mock caster streaming, proxy relays **MOCK**.
 
+**Automated (CI + cold clone):** Docker, `curl`, and `jq` required.
+
 ```bash
 git clone https://github.com/AlexanderNess/grokbot.git
 cd grokbot
+./scripts/smoke-local.sh
+# copies .env.example → .env if needed, boots compose --profile mock-caster,
+# asserts GET /healthz and NTRIP MOCK ICY/200 with body bytes (curl timeout OK)
+```
+
+GitHub Actions workflow `.github/workflows/local-compose-smoke.yml` runs the same script on PRs/pushes to `main`.
+
+### Manual steps (same path the script follows)
+
+```bash
 cp .env.example .env
 # .env has a local-dev VAULT_KEK and ALLOW_FIXTURE_ORGS=true — replace before any shared host
 
@@ -51,6 +63,12 @@ echo "$DEV"
 ```
 
 NTRIP client → `127.0.0.1:2101`, mountpoint **MOCK**, user/pass = the device pseudo-credentials. You should see a continuous mock RTCM-ish stream from the caster through the proxy.
+
+Quick NTRIP assert (streaming; curl exit 28 after `--max-time` is fine if headers show ICY/200 and body has bytes):
+
+```bash
+curl -v -N --http0.9 -u "$PSEUDO_USER:$PSEUDO_PASS" --max-time 3 "http://127.0.0.1:2101/MOCK"
+```
 
 Failover demo (two upstreams, kill primary): `docs/runbooks/m2-failover-demo.md`.  
 Prod-shaped smoke (fixtures off, ops pilot path, SSH tunnel): `docs/runbooks/hetzner-deploy.md` §9.
