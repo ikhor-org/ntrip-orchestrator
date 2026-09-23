@@ -5,9 +5,11 @@ This software is dual-licensed:
 1. Community / open use — GNU Affero General Public License v3.0 or later
    (AGPL-3.0-or-later). See the LICENSE file for the full license text.
    SPDX identifiers in package.json use AGPL-3.0-or-later for flexibility
-   with future AGPL versions.
+   with future AGPL versions. The intended product path is self-run under AGPL.
 
-2. Commercial closed embed / SaaS — a separate commercial license from the
-   copyright holder is required. See COMMERCIAL.md for how to inquire.
+2. Commercial — a separate commercial license from the copyright holder may
+   grant rights for closed embed or closed redistribution without AGPL
+   obligations. See COMMERCIAL.md. Dual-license is legal armor; there is no
+   hosted SaaS / cloud product offering in this project.
 
 No additional permissions or warranties are granted by this NOTICE.
