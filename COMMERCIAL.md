@@ -1,41 +1,45 @@
-# Commercial licensing (closed embed)
+# Commercial licensing
 
-**Not legal advice.** This file does not grant commercial rights.
+**Status:** stub  
+**Not legal advice.** This file does not grant commercial rights. Ikhor AS (org.nr 935 459 540) owns final commercial terms.
 
-The default license for Ntrip Orchestrator is **AGPL-3.0-or-later** (see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE)). A commercial license is optional rights for parties who need **closed embedding** or **closed redistribution** without AGPL copyleft obligations. It is not a cloud product and not an offer to host the service for you.
+## Product vs license
 
-## Dual-license is legal armor only
+**The product is self-run AGPL software** — clone, compose, operate it yourself. There is **no** hosted SaaS / “cloud Ntrip Orchestrator” product goal.
+
+**Dual-license is legal armor only.** A commercial license is optional rights for parties who need to embed or redistribute **Ntrip Orchestrator** in a **closed** product **without** AGPL copyleft obligations. It is not an offer to host the service for you.
+
+## Dual license (summary)
 
 | Path | What it covers |
 | --- | --- |
-| **AGPL-3.0-or-later** | Default: run, study, modify, and operate the software yourself under the Affero GPL. |
-| **Commercial license** | Separate written permission for closed embed or closed redistribution without AGPL obligations. Negotiated case-by-case. |
+| **AGPL-3.0-or-later** (`LICENSE`, `NOTICE`) | Default: run, study, modify, and operate the software yourself under the Affero GPL. Network use under AGPL requires offering corresponding source to users. |
+| **Commercial license** | Separate written permission for **closed embed** or **closed redistribution** without AGPL obligations that would otherwise apply. Negotiated case-by-case. |
 
 Everything not granted in a signed commercial agreement remains under AGPL-3.0-or-later.
 
-## What a commercial license is / is not
+## What stays AGPL
 
-**Is:**
+- The public repository and default distribution remain AGPL-3.0-or-later.
+- Contributions to the open project are under AGPL-3.0-or-later unless a separate contributor agreement says otherwise (none published yet).
+- Running the open build yourself under AGPL does **not** require a commercial license.
 
-- Closed-source embed of Ntrip Orchestrator inside a proprietary OEM / fleet product
-- Closed redistribution arrangements agreed in writing with Ikhor AS
+## What a commercial license is for
 
-**Is not:**
+Illustrative only — final schedule TBD:
 
-- A hosted SaaS / multi-tenant cloud offering from this project
-- A support SLA or managed operations product
-- A payment portal, price list, or bank/IBAN details in this repository
+- Shipping Ntrip Orchestrator **inside** a proprietary OEM / fleet product without releasing that product under AGPL
+- Other **closed** redistribution or embed arrangements agreed in writing
+
+Not in scope as a product offering: an Ikhor-operated hosted cloud / multi-tenant SaaS for customers.
 
 ## How to inquire
 
-Contact **Ikhor AS** (org.nr **935 459 540**):
+1. Email **contact@ikhor.io**, or open a [GitHub Issue](https://github.com/ikhor-org/ntrip-orchestrator/issues) on this repository. Company site: [ikhor.io](https://ikhor.io/).
+2. Include: organization name, country, intended closed embed or redistribution use, approximate device or seat scale, and whether you need indemnity/SLA language.
+3. Expect written terms negotiated case-by-case. Do not assume a license until countersigned.
 
-- Email: [contact@ikhor.io](mailto:contact@ikhor.io)
-- Web: [https://ikhor.io/](https://ikhor.io/)
-
-Include organization name, country, intended closed embed or redistribution use, and approximate device or seat scale. Terms are set by Ikhor AS. Do not assume a license until countersigned.
-
-No secrets, pricing tables, bank details, or signed terms live in this repository.
+No secrets, pricing tables, bank/payment details, or signed terms live in this repository.
 
 ## Standing product constraints
 
@@ -43,4 +47,4 @@ Commercial use (when licensed) is still bound by product non-goals (see [`docs/N
 
 ---
 
-*Clone and run under AGPL; commercial paperwork is optional armor for closed embed.*
+*Stub only. Clone and run; paperwork is optional armor.*
