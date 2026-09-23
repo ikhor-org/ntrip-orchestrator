@@ -6,7 +6,7 @@ import {
   orgIsUsable,
   ProfilePolicy,
   Store,
-} from '@grokbot/core';
+} from '@ntrip-orchestrator/core';
 import { ApiErrorBody } from './types.js';
 
 export interface ProfileResult {

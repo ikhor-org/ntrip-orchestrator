@@ -19,7 +19,7 @@ import {
   Store,
   UpstreamEndpoint,
   VaultSecretRecord,
-} from '@grokbot/core';
+} from '@ntrip-orchestrator/core';
 import { createProxyServer } from './server.js';
 import { setUpstreamConnectOverride } from './relay.js';
 import { loadProxyConfig } from './config.js';

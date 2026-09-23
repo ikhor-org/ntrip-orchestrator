@@ -3,7 +3,7 @@ import {
   signUsageExport,
   Store,
   webhookPublicView,
-} from '@grokbot/core';
+} from '@ntrip-orchestrator/core';
 import { ApiErrorBody } from './types.js';
 
 function parseQuery(url: string): URLSearchParams {

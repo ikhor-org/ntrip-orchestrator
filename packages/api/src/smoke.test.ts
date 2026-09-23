@@ -8,7 +8,7 @@ import {
   decryptJson,
   parseKek,
   NtripBasicSecret,
-} from '@grokbot/core';
+} from '@ntrip-orchestrator/core';
 import { createServer } from './server.js';
 import { loadConfig } from './config.js';
 

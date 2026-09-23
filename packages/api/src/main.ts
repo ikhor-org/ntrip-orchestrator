@@ -1,4 +1,4 @@
-import { getDefaultStore } from '@grokbot/core';
+import { getDefaultStore } from '@ntrip-orchestrator/core';
 import { loadConfig } from './config.js';
 import { createServer } from './server.js';
 
@@ -11,7 +11,7 @@ async function main(): Promise<void> {
   server.listen(config.port, () => {
     // eslint-disable-next-line no-console
     console.log(
-      `grokbot-api M1 listening on :${config.port} (fixture_orgs=${config.allowFixtureOrgs})`,
+      `ntrip-orchestrator-api M1 listening on :${config.port} (fixture_orgs=${config.allowFixtureOrgs})`,
     );
   });
 }

@@ -1,6 +1,6 @@
 import net from 'node:net';
-import { getRoutableAdapter } from '@grokbot/adapters';
-import { getDefaultStore, setDefaultStore, Store } from '@grokbot/core';
+import { getRoutableAdapter } from '@ntrip-orchestrator/adapters';
+import { getDefaultStore, setDefaultStore, Store } from '@ntrip-orchestrator/core';
 import { authenticatePseudo, parseBasicAuth } from './auth.js';
 import { loadProxyConfig, ProxyRuntimeConfig } from './config.js';
 import { handleAuthenticatedSession } from './relay.js';
@@ -57,7 +57,7 @@ export function createProxyServer(opts: ProxyServerOptions = {}): net.Server {
           });
           await store.persist();
           socket.write(
-            'HTTP/1.0 401 Unauthorized\r\nWWW-Authenticate: Basic realm="grokbot"\r\n\r\n',
+            'HTTP/1.0 401 Unauthorized\r\nWWW-Authenticate: Basic realm="ntrip-orchestrator"\r\n\r\n',
           );
           socket.end();
           return;

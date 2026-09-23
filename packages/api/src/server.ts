@@ -1,12 +1,12 @@
 import http from 'node:http';
-import { listRoutableAdapters } from '@grokbot/adapters';
+import { listRoutableAdapters } from '@ntrip-orchestrator/adapters';
 import {
   FIXTURE_ORG_ID,
   getDefaultStore,
   parseKek,
   setDefaultStore,
   Store,
-} from '@grokbot/core';
+} from '@ntrip-orchestrator/core';
 import { ApiConfig, loadConfig } from './config.js';
 import { provisionDevice } from './devices.js';
 import {
@@ -110,7 +110,7 @@ export function createServer(opts: CreateServerOptions = {}): http.Server {
       if (match(method, url, 'GET', /^\/healthz$/)) {
         sendJson(res, 200, {
           ok: true,
-          service: 'grokbot-api',
+          service: 'ntrip-orchestrator-api',
           milestone: 'M3',
           routable_adapters: listRoutableAdapters().map((a) => a.type),
           fixture_org_id: FIXTURE_ORG_ID,

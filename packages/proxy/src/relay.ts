@@ -7,7 +7,7 @@ import {
   SecretMaterial,
   UpstreamEndpoint as AdapterEndpoint,
   UpstreamSession,
-} from '@grokbot/adapters';
+} from '@ntrip-orchestrator/adapters';
 import {
   decryptJson,
   DEFAULT_FAILOVER,
@@ -21,7 +21,7 @@ import {
   selectCandidates,
   Store,
   UpstreamEndpoint,
-} from '@grokbot/core';
+} from '@ntrip-orchestrator/core';
 import { ProxyRuntimeConfig } from './config.js';
 import { ProxySession } from './session.js';
 
@@ -465,7 +465,7 @@ export async function handleAuthenticatedSession(opts: {
   });
   await store.persist();
 
-  socket.write('ICY 200 OK\r\nServer: grokbot-proxy-m2\r\n\r\n');
+  socket.write('ICY 200 OK\r\nServer: ntrip-orchestrator-proxy-m2\r\n\r\n');
 
   let ended = false;
   let rtcmAbort: AbortController | null = new AbortController();

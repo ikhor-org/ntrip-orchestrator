@@ -7,7 +7,7 @@ import {
   Store,
   UpstreamEndpoint,
   VaultSecretRecord,
-} from '@grokbot/core';
+} from '@ntrip-orchestrator/core';
 import { ApiConfig } from './config.js';
 import { ApiErrorBody } from './types.js';
 
