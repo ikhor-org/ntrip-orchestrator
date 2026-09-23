@@ -6,7 +6,7 @@ Software that sits above correction networks: credential vault, multi-network NT
 
 Not another end-user survey CORS seat. Not a base-station network.
 
-**License:** AGPL-3.0-or-later (community) + commercial — see `LICENSE`, `NOTICE`, and [`COMMERCIAL.md`](COMMERCIAL.md).
+**License:** AGPL-3.0-or-later (self-run). Dual-license is legal armor for closed embed — see `LICENSE`, `NOTICE`, and [`COMMERCIAL.md`](COMMERCIAL.md). No hosted SaaS product.
 
 ---
 
@@ -109,10 +109,9 @@ Standing constraints — full list in [`docs/NON-GOALS.md`](docs/NON-GOALS.md):
 
 ## License
 
-**Dual-licensed.**
+**Product:** self-run under [AGPL-3.0-or-later](LICENSE). Clone and operate it yourself. Copyright and SPDX: see [`NOTICE`](NOTICE).
 
-- **Open / community:** [GNU Affero General Public License v3 or later](LICENSE) (`AGPL-3.0-or-later`). Use, study, modify, and run under AGPL; network use requires offering corresponding source. Copyright and SPDX: see [`NOTICE`](NOTICE).
-- **Commercial:** Closed-source embed, proprietary redistribution, or SaaS without AGPL obligations requires a separate commercial license — see [`COMMERCIAL.md`](COMMERCIAL.md).
+**Dual-license (legal armor only):** a separate commercial license may cover **closed embed** or **closed redistribution** without AGPL obligations — see [`COMMERCIAL.md`](COMMERCIAL.md). That is not a hosted SaaS offering and not a product roadmap item.
 
 Final commercial terms are owned by Alexander Ness. Nothing in this repo is legal advice.
 
@@ -135,7 +134,7 @@ Local without Docker: set `VAULT_KEK` and `GROKBOT_STORE_PATH`, then `npm run de
 
 | Doc | Purpose |
 | --- | --- |
-| [`COMMERCIAL.md`](COMMERCIAL.md) | Commercial license inquiry stub |
+| [`COMMERCIAL.md`](COMMERCIAL.md) | Commercial closed-embed rights stub (not a SaaS offer) |
 | [`NOTICE`](NOTICE) | Copyright + dual-license notice |
 | [`docs/NON-GOALS.md`](docs/NON-GOALS.md) | Standing product/legal constraints |
 | [`docs/architecture.md`](docs/architecture.md) | v0 architecture |
